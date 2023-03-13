@@ -1,14 +1,30 @@
 import torch
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
+import torch.nn as nn 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 import evaluate as evaluate
 from transformers import get_scheduler
-from transformers import AutoModelForSequenceClassification
+from transformers import AutoModelForSequenceClassification, T5Model
 import argparse
 import subprocess
+import matplotlib.pyplot as plt
 
+
+class T5ForSequenceClassification(nn.Module):
+
+    def __init__(self, t5model, num_labels=2):
+        super(T5ForSequenceClassification, self).__init__()
+        self.model = T5Model.from_pretrained(t5model)
+        self.classifier = nn.Linear(512, num_labels)
+    
+    def forward(self, input_ids, attention_mask, decoder_input_ids):
+        output = self.model(input_ids=input_ids, attention_mask=attention_mask, decoder_input_ids=decoder_input_ids)
+        last_hidden_state = output.last_hidden_state
+        mean = torch.mean(last_hidden_state, dim=1)
+        logits = self.classifier(mean)
+        return logits
 
 def print_gpu_memory():
     """
@@ -66,7 +82,9 @@ class BoolQADataset(torch.utils.data.Dataset):
             padding="max_length",
             truncation=True
         )
-
+        
+        
+        
         return {
             'input_ids': encoded_review['input_ids'][0],  # we only have one example in the batch
             'attention_mask': encoded_review['attention_mask'][0],
@@ -75,7 +93,7 @@ class BoolQADataset(torch.utils.data.Dataset):
         }
 
 
-def evaluate_model(model, dataloader, device):
+def evaluate_model(model, dataloader, device, model_name):
     """ Evaluate a PyTorch Model
     :param torch.nn.Module model: the model to be evaluated
     :param torch.utils.data.DataLoader test_dataloader: DataLoader containing testing examples
@@ -91,9 +109,11 @@ def evaluate_model(model, dataloader, device):
     for batch in dataloader:
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
-        output = model(input_ids=input_ids, attention_mask=attention_mask)
-
-        predictions = output.logits
+        if 't5' in model_name:
+            predictions = model(input_ids=input_ids, attention_mask=attention_mask, decoder_input_ids=input_ids)
+        else:
+            output = model(input_ids=input_ids, attention_mask=attention_mask)
+            predictions = output.logits
         predictions = torch.argmax(predictions, dim=1)
         dev_accuracy.add_batch(predictions=predictions, references=batch['labels'])
 
@@ -101,7 +121,7 @@ def evaluate_model(model, dataloader, device):
     return dev_accuracy.compute()
 
 
-def train(mymodel, num_epochs, train_dataloader, validation_dataloader, device, lr):
+def train(mymodel, num_epochs, train_dataloader, validation_dataloader, test_dataloder, device, lr, model_name):
     """ Train a PyTorch Module
 
     :param torch.nn.Module mymodel: the model to be trained
@@ -110,6 +130,7 @@ def train(mymodel, num_epochs, train_dataloader, validation_dataloader, device, 
     :param torch.utils.data.DataLoader validation_dataloader: DataLoader containing validation examples
     :param torch.device device: the device that we'll be training on
     :param float lr: learning rate
+    :param string model_name: the name of the model
     :return None
     """
 
@@ -127,6 +148,10 @@ def train(mymodel, num_epochs, train_dataloader, validation_dataloader, device, 
     )
 
     loss = torch.nn.CrossEntropyLoss()
+    
+    epoch_list = []
+    train_acc_list = []
+    dev_acc_list = []
 
     for epoch in range(num_epochs):
 
@@ -156,10 +181,15 @@ def train(mymodel, num_epochs, train_dataloader, validation_dataloader, device, 
 
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
-
-            output = mymodel(input_ids=input_ids, attention_mask=attention_mask)
-            predictions = output.logits
-            model_loss = loss(predictions, batch['labels'])
+            groundtruth = batch['labels'].to(device)
+            
+            if 't5' in model_name:
+                predictions = mymodel(input_ids=input_ids, attention_mask=attention_mask, decoder_input_ids=input_ids)
+            else:
+                output = mymodel(input_ids=input_ids, attention_mask=attention_mask)
+                predictions = output.logits
+            
+            model_loss = loss(predictions, groundtruth)
             model_loss.backward()
             optimizer.step()
             lr_scheduler.step()
@@ -169,15 +199,31 @@ def train(mymodel, num_epochs, train_dataloader, validation_dataloader, device, 
 
             # update metrics
             train_accuracy.add_batch(predictions=predictions, references=batch['labels'])
-
+            
         # print evaluation metrics
         print(f" ===> Epoch {epoch + 1}")
-        print(f" - Average training metrics: accuracy={train_accuracy.compute()}")
+        train_acc = train_accuracy.compute()
+        print(f" - Average training metrics: accuracy={train_acc}")
+        train_acc_list.append(train_acc['accuracy'])
 
         # normally, validation would be more useful when training for many epochs
-        val_accuracy = evaluate_model(mymodel, validation_dataloader, device)
+        val_accuracy = evaluate_model(mymodel, validation_dataloader, device, model_name)
         print(f" - Average validation metrics: accuracy={val_accuracy}")
-
+        dev_acc_list.append(val_accuracy['accuracy'])
+        
+        epoch_list.append(epoch)
+        
+        test_accuracy = evaluate_model(mymodel, test_dataloader, device, model_name)
+        print(f" - Average test metrics: accuracy={test_accuracy}")
+    
+    """
+    plt.plot(epoch_list, train_acc_list, 'b', label='train')
+    plt.plot(epoch_list, dev_acc_list, 'g', label='valid')
+    plt.xlabel('Training Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.savefig('/home/tli104/self_supervised_sp23/hw6/overfitting.pdf')
+    """
 
 def pre_process(model_name, batch_size, device, small_subset):
     # download dataset
@@ -240,7 +286,10 @@ def pre_process(model_name, batch_size, device, small_subset):
 
     # from Hugging Face (transformers), read their documentation to do this.
     print("Loading the model ...")
-    pretrained_model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+    if 't5' in model_name:
+        pretrained_model = T5ForSequenceClassification(model_name, num_labels=2)
+    else:
+        pretrained_model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
 
     print("Moving model to device ..." + str(device))
     pretrained_model.to(device)
@@ -269,13 +318,13 @@ if __name__ == "__main__":
                                                                                              args.device,
                                                                                              args.small_subset)
     print(" >>>>>>>>  Starting training ... ")
-    train(pretrained_model, args.num_epochs, train_dataloader, validation_dataloader, args.device, args.lr)
+    train(pretrained_model, args.num_epochs, train_dataloader, validation_dataloader, test_dataloader, args.device, args.lr, args.model)
     
     # print the GPU memory usage just to make sure things are alright
     print_gpu_memory()
 
-    val_accuracy = evaluate_model(pretrained_model, validation_dataloader, device)
+    val_accuracy = evaluate_model(pretrained_model, validation_dataloader, args.device, args.model)
     print(f" - Average DEV metrics: accuracy={val_accuracy}")
 
-    test_accuracy = evaluate_model(pretrained_model, test_dataloader, device)
+    test_accuracy = evaluate_model(pretrained_model, test_dataloader, args.device, args.model)
     print(f" - Average TEST metrics: accuracy={test_accuracy}")
