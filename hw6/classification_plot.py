@@ -190,11 +190,11 @@ def train(mymodel, num_epochs, train_dataloader, validation_dataloader, test_dat
         
     
     plt.plot(epoch_list, train_acc_list, 'b', label='train')
-    plt.plot(epoch_list, dev_acc_list, 'g', label='valid')
+    #plt.plot(epoch_list, dev_acc_list, 'g', label='valid')
     plt.xlabel('Training Epochs')
     plt.ylabel('Accuracy')
     plt.legend()
-    plt.savefig('/home/tli104/self_supervised_sp23/hw6/overfitting.pdf')
+    plt.savefig('/home/tli104/self_supervised_sp23/hw6/small_overfitting.pdf')
 
 def pre_process(model_name, batch_size, device, small_subset):
     # download dataset

@@ -17,129 +17,16 @@ class T5ForSequenceClassification(nn.Module):
     def __init__(self, t5model, num_labels=2):
         super(T5ForSequenceClassification, self).__init__()
         self.model = T5Model.from_pretrained(t5model)
-        self.classifier = nn.Linear(512, num_labels)
+        if 'base' in t5model:
+            hidden_dim = 768
+        elif 'small' in t5model:
+            hidden_dim = 512
+        self.classifier = nn.Linear(hidden_dim, num_labels)
     
     def forward(self, input_ids, attention_mask, decoder_input_ids):
         output = self.model(input_ids=input_ids, attention_mask=attention_mask, decoder_input_ids=decoder_input_ids)
         last_hidden_state = output.last_hidden_state
-        mean = torch.mean(last_hidden_state, dim=1)
-        logits = self.classifier(mean)
-        return logits
-
-def print_gpu_memory():
-    """
-    Print the amount of GPU memory used by the current process
-    This is useful for debugging memory issues on the GPU
-    """
-    # check if gpu is available
-    if torch.cuda.is_available():
-        print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
-        print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
-        print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
-
-        p = subprocess.check_output('nvidia-smi')
-        print(p.decode("utf-8"))
-
-
-class BoolQADataset(torch.utils.data.Dataset):
-    """
-    Dataset for the dataset of BoolQ questions and answers
-    """
-
-    def __init__(self, passages, questions, answers, tokenizer, max_len):
-        self.passages = passages
-        self.questions = questions
-        self.answers = answers
-        self.tokenizer = tokenizer
-        self.max_len = max_len
-
-    def __len__(self):
-        return len(self.answers)
-
-    def __getitem__(self, index):
-        """
-        This function is called by the DataLoader to get an instance of the data
-        :param index:
-        :return:
-        """
-
-        passage = str(self.passages[index])
-        question = self.questions[index]
-        answer = self.answers[index]
-
-        # this is input encoding for your model. Note, question comes first since we are doing question answering
-        # and we don't wnt it to be truncated if the passage is too long
-        input_encoding = question + " [SEP] " + passage
-
-        # encode_plus will encode the input and return a dictionary of tensors
-        encoded_review = self.tokenizer.encode_plus(
-            input_encoding,
-            add_special_tokens=True,
-            max_length=self.max_len,
-            return_token_type_ids=False,
-            return_attention_mask=True,
-            return_tensors="pt",
-            padding="max_length",
-            truncation=True
-        )
-        
-        
-        
-        return {
-            'input_ids': encoded_review['input_ids'][0],  # we only have one example in the batch
-            'attention_mask': encoded_review['attention_mask'][0],
-            # attention mask tells the model where tokens are padding
-            'labels': torch.tensor(answer, dtype=torch.long)  # labels are the answers (yes/no)
-        }
-
-
-def evaluate_model(model, dataloader, device, model_name):
-    """ Evaluate a PyTorch Model
-    :param torch.nn.Module model: the model to be evaluated
-    :param torch.utils.data.DataLoader test_dataloader: DataLoader containing testing examples
-    :param torch.device device: the device that we'll be training on
-    :return accuracy
-    """
-    # load metrics
-    dev_accuracy = evaluate.load('accuracy')
-
-    # turn model into evaluation mode
-    model.eval()
-
-    for batch in dataloader:
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
-        if 't5' in model_name:
-            predictions = model(input_ids=input_ids, attention_mask=attention_mask, decoder_input_ids=input_ids)
-        else:
-            output = model(input_ids=input_ids, attention_mask=attention_mask)
-            predictions = output.logits
-        predictions = torch.argmax(predictions, dim=1)
-        dev_accuracy.add_batch(predictions=predictions, references=batch['labels'])
-
-    # compute and return metrics
-    return dev_accuracy.compute()
-
-
-def train(mymodel, num_epochs, train_dataloader, validation_dataloader, test_dataloder, device, lr, model_name):
-    """ Train a PyTorch Module
-
-    :param torch.nn.Module mymodel: the model to be trained
-    :param int num_epochs: number of epochs to train for
-    :param torch.utils.data.DataLoader train_dataloader: DataLoader containing training examples
-    :param torch.utils.data.DataLoader validation_dataloader: DataLoader containing validation examples
-    :param torch.device device: the device that we'll be training on
-    :param float lr: learning rate
-    :param string model_name: the name of the model
-    :return None
-    """
-
-    # here, we use the AdamW optimizer. Use torch.optim.Adam.
-    # instantiate it on the untrained model parameters with a learning rate of 5e-5
-    print(" >>>>>>>>  Initializing optimizer")
-    optimizer = torch.optim.AdamW(mymodel.parameters(), lr=lr)
-
-    # now, we set up the learning rate scheduler
+   scheduler
     lr_scheduler = get_scheduler(
         "linear",
         optimizer=optimizer,
