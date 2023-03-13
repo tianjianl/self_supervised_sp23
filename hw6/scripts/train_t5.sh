@@ -21,6 +21,13 @@ conda activate toy_classification_env # open the Python environment
 pip install -r requirements.txt # install Python dependencies
 
 # runs your code
+
 srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-4 --num_epochs 9
 srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 5e-4 --num_epochs 9
 srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-3 --num_epochs 9
+srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-4 --num_epochs 7
+srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 5e-4 --num_epochs 7
+srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-3 --num_epochs 7
+srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-4 --num_epochs 5
+srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 5e-4 --num_epochs 5
+srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-3 --num_epochs 5

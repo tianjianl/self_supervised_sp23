@@ -24,3 +24,9 @@ pip install -r requirements.txt # install Python dependencies
 srun python classification.py  --experiment "full" --device cuda --model "RoBERTa-base" --batch_size "32" --lr 1e-4 --num_epochs 9
 srun python classification.py  --experiment "full" --device cuda --model "RoBERTa-base" --batch_size "32" --lr 5e-4 --num_epochs 9
 srun python classification.py  --experiment "full" --device cuda --model "RoBERTa-base" --batch_size "32" --lr 1e-3 --num_epochs 9
+srun python classification.py  --experiment "full" --device cuda --model "RoBERTa-base" --batch_size "32" --lr 1e-4 --num_epochs 7
+srun python classification.py  --experiment "full" --device cuda --model "RoBERTa-base" --batch_size "32" --lr 5e-4 --num_epochs 7
+srun python classification.py  --experiment "full" --device cuda --model "RoBERTa-base" --batch_size "32" --lr 1e-3 --num_epochs 7
+srun python classification.py  --experiment "full" --device cuda --model "RoBERTa-base" --batch_size "32" --lr 1e-4 --num_epochs 5
+srun python classification.py  --experiment "full" --device cuda --model "RoBERTa-base" --batch_size "32" --lr 5e-5 --num_epochs 5
+srun python classification.py  --experiment "full" --device cuda --model "RoBERTa-base" --batch_size "32" --lr 1e-3 --num_epochs 5
