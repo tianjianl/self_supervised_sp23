@@ -9,7 +9,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=12:00:00
 #SBATCH --job-name="HW6 CS 601.471/671 homework"
-#SBATCH --output=t5_base_hparam_serach.out
+#SBATCH --output=t5_small_hparam_serach.out
 
 module load anaconda
 
@@ -22,12 +22,12 @@ pip install -r requirements.txt # install Python dependencies
 
 # runs your code
 
-srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-4 --num_epochs 9
-srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 5e-4 --num_epochs 9
-srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-3 --num_epochs 9
-srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-4 --num_epochs 7
-srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 5e-4 --num_epochs 7
-srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-3 --num_epochs 7
-srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-4 --num_epochs 5
-srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 5e-4 --num_epochs 5
-srun python classification.py  --experiment "full" --device cuda --model "t5-base" --batch_size "8" --lr 1e-3 --num_epochs 5
+srun python classification.py  --experiment "full" --device cuda --model "t5-small" --batch_size "32" --lr 1e-4 --num_epochs 9
+srun python classification.py  --experiment "full" --device cuda --model "t5-small" --batch_size "32" --lr 5e-4 --num_epochs 9
+srun python classification.py  --experiment "full" --device cuda --model "t5-small" --batch_size "32" --lr 1e-3 --num_epochs 9
+srun python classification.py  --experiment "full" --device cuda --model "t5-small" --batch_size "32" --lr 1e-4 --num_epochs 7
+srun python classification.py  --experiment "full" --device cuda --model "t5-small" --batch_size "32" --lr 5e-4 --num_epochs 7
+srun python classification.py  --experiment "full" --device cuda --model "t5-small" --batch_size "32" --lr 1e-3 --num_epochs 7
+srun python classification.py  --experiment "full" --device cuda --model "t5-small" --batch_size "32" --lr 1e-4 --num_epochs 5
+srun python classification.py  --experiment "full" --device cuda --model "t5-small" --batch_size "32" --lr 5e-4 --num_epochs 5
+srun python classification.py  --experiment "full" --device cuda --model "t5-small" --batch_size "32" --lr 1e-3 --num_epochs 5
