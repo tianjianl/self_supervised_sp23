@@ -4,7 +4,8 @@ from glob import glob
 
 def data_to_df(task, language, split):
     
-    if task == "xnli":
+    if task == '
+    elif task == "xnli":
         filename = f"../download/xnli/{split}-{language}.tsv"
         f = open(filename, 'r')
         src = []
@@ -48,6 +49,7 @@ def data_to_df(task, language, split):
         df = pd.DataFrame({"src": src, "label": tgt})
         print(df.head(5))
         return df
+    
     elif task == 'pawsx':
         filename = f"../download/pawsx/{split}-{language}.tsv"
         f = open(filename, 'r')
