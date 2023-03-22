@@ -1,1 +1,3 @@
-data_utils/glue_data
+*.pth
+wandb/
+glue_data/

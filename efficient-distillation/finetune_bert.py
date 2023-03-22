@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import cuda
 from torch.utils.data import Dataset, DataLoader, RandomSampler, SequentialSampler
-from transformers import BertModel
+from transformers import BertModel, BertTokenizer
 from init_data import data_to_df 
 
 from rotk import Regularizer
@@ -30,7 +30,7 @@ class BertForSequenceClassification(nn.Module):
         self.classifier_t = nn.Linear(hidden_size, num_labels)
         self.classifier_s = nn.Linear(hidden_size, num_labels)
 
-    def forward(self, input_ids, attention_mask, student_layer):
+    def forward(self, input_ids, attention_mask, student_layer=0):
         
         output = self.model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
         hidden_states = output.hidden_states
@@ -111,7 +111,7 @@ def weighted_dropout(params, probs):
     params = params * mask
     return params.view(param_shape)
 
-def train(epoch, tokenizer, model, device, loader, optimizer, scheduler=None, regularizer=None, param_importance_dict=None, weighted_dropout_iters=0):
+def train(epoch, tokenizer, model, device, loader, optimizer, scheduler=None, regularizer=None, param_importance_dict=None, wd_iter=0):
     
     model.train()
     start = time.time()
@@ -124,8 +124,8 @@ def train(epoch, tokenizer, model, device, loader, optimizer, scheduler=None, re
         x_mask = data['source_mask'].to(device, dtype = torch.long)
         y = data['label'].to(device)
         
-        output = model(input_ids = x, attention_mask = x_mask)
-        y_hat = output.logits
+        output, output_student = model(input_ids = x, attention_mask = x_mask)
+        y_hat = output        
         y_hat = F.log_softmax(y_hat, dim=1)
         loss = loss_fn(y_hat, y)
         
@@ -139,7 +139,7 @@ def train(epoch, tokenizer, model, device, loader, optimizer, scheduler=None, re
         loss.backward()
         optimizer.step()
         
-        if weighted_dropout_iters == 0:
+        if wd_iter == 0:
             continue
 
         if iteration % weighted_dropout_iters == 0:
@@ -229,8 +229,8 @@ def validate(epoch, tokenizer, model, device, val_loader):
             x_mask = data['source_mask'].to(device, dtype = torch.long)
             y = data['label'].to(device, dtype = torch.long)
 
-            output = model(input_ids = x, attention_mask = x_mask)
-            y_hat = output.logits
+            output, output_student = model(input_ids = x, attention_mask = x_mask)
+            y_hat = output            
             y_hat = F.log_softmax(y_hat, dim=1)
             loss = loss_fn(y_hat, y)
             
@@ -268,7 +268,7 @@ def get_usadam_param_groups(model):
         ]
     return optimizer_parameters
 
-label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst': 2, 'sts-b': 2, 'qnli': 2, 'qqp': 2}
+label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst-2': 2, 'sts-b': 2, 'qnli': 2, 'qqp': 2}
 
 def main(args):
     
@@ -278,12 +278,13 @@ def main(args):
         wandb_name += '-sage'
     if args.weighted_dropout_iters > 0:
         wandb_name += f'-wd-{args.weighted_dropout_iters}'
-    wandb.init(project=f"bert-distillation", entity="dogtooooth", name=wandb_name)
+    wandb.init(project=f"bert-glue-distillation", entity="dogtooooth", name=wandb_name)
 
     num_labels = label_dict[args.task]
     model = BertForSequenceClassification(args.model_name, num_labels)
     model.to(device)
-    
+    tokenizer = BertTokenizer.from_pretrained(args.model_name)
+
     torch.manual_seed(args.seed) # pytorch random seed
     np.random.seed(args.seed) # numpy random seed
     torch.backends.cudnn.deterministic = True
@@ -302,22 +303,25 @@ def main(args):
         optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.lr) 
     
     acc = evaluate.load("accuracy")
+    matthews_metric = evaluate.load("matthews_correlation")
+    f1_metric = evaluate.load("f1")
+
     loader_params = {
         'batch_size': args.bs,
         'shuffle': True,
         'num_workers': 0
     }
     
-    train_dataset = data_to_df(task=args.task, split='train')
+    train_dataset = data_to_df(task=args.task, language='en', split='train')
     
     print("TRAIN Dataset: {}".format(train_dataset.shape))
     train_dataset = CustomClassificationDataset(train_dataset, tokenizer, args.max_len)
     train_loader = DataLoader(train_dataset, **loader_params)
   
-    val_dataset = data_to_df(task=args.task, split='dev')
+    val_dataset = data_to_df(task=args.task, language='en', split='dev')
+    val_dataset = CustomClassificationDataset(val_dataset, tokenizer, args.max_len)
     val_loader = DataLoader(val_dataset, **loader_params)
-
-    regularizer = None
+    
     if args.regularizer != None:
         regularizer = Regularizer(model = model, alpha = 1, dataset = train_loader, regularizer_type = args.regularizer)
     
@@ -327,6 +331,14 @@ def main(args):
         model.load_state_dict(torch.load(f"./{args.task}_latest.pth"))   
         print(f"loaded checkpoint at {args.task}_latest.pth")
         y_hat, y, dev_loss = validate(epoch, tokenizer, model, device, val_loader)       
+        if args.task == 'cola':
+            result = matthews_metric.compute(references=y, predictions=y_hat) 
+            print(f"epoch = {epoch} | mcc = {result['matthews_correlation']}")
+        
+        if args.task == 'mrpc' or args.task == 'qqp':
+            f1_result = f1_metric.compute(references=y, predictions=y_hat)
+            print(f"epoch = {epoch} | f1 = {f1_result['f1']}")
+
         result = acc.compute(references = y, predictions = y_hat)
         print(f"epoch = {epoch} | acc = {result['accuracy']}")
                    
@@ -335,6 +347,10 @@ def main(args):
         torch.save(model.state_dict(), f"{args.task}_latest.pth")
         
         y_hat, y, dev_loss = validate(epoch, tokenizer, model, device, val_loader)       
+        if args.task == 'cola':
+            result = matthews_metric.compute(references=y, predictions=y_hat) 
+            print(f"epoch = {epoch} | mcc = {result['matthews_correlation']}")
+ 
         result = acc.compute(references = y, predictions = y_hat)
         print(f"epoch = {epoch} | acc = {result['accuracy']}")
 
@@ -359,10 +375,10 @@ if __name__ == "__main__":
     parser.add_argument("--sage", action='store_true')
     parser.add_argument("--plot_params", action='store_true')
     parser.add_argument("--regularizer", default=None)
-    parser.add_argument("--weighted_dropout_iters", type=int, help="interval for calculating weighted dropout")
+    parser.add_argument("--weighted_dropout_iters", type=int, default=0, help="interval for calculating weighted dropout")
     
     # distillation related
-    parser.add_argument("--student_layer", defaut=8, type=int)
+    parser.add_argument("--student_layer", default=8, type=int)
     args = parser.parse_args()
     
     assert args.model_name in ['bert-base-uncased', 'bert-large-uncased'], "This code base only support bert-base-uncased and bert-large-uncased"

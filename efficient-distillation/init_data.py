@@ -4,7 +4,93 @@ from glob import glob
 
 def data_to_df(task, language, split):
     
-    if task == '
+    if task == 'cola':
+        filename = f"glue_data/CoLA/{split}.tsv"
+        f = open(filename, 'r')
+        src = []
+        labels = []
+        for line in f:
+            cols = line.strip().split('\t')
+            label = int(cols[1])
+            context = cols[-1]
+            src.append(context)
+            labels.append(label)
+        df = pd.DataFrame({"src": src, "label": labels})
+        #df = df.sample(frac=1, ignore_index=True)
+        return df
+
+    elif task == 'qnli' or task == 'rte':
+        task = task.upper()
+        filename = f"glue_data/{task}/{split}.tsv"
+        f = open(filename, 'r')
+        src = []
+        labels = []
+        for index, line in enumerate(f):
+            if index == 0:
+                continue
+            cols = line.strip().split('\t')
+            question = cols[1]
+            context = cols[2]
+            label = 1 if cols[3] == 'entailment' else 0
+            src.append(context + " " + question)
+            labels.append(label)
+
+        df = pd.DataFrame({"src": src, "label": labels})
+        return df
+     
+    elif task == 'qqp':
+        filename = f"glue_data/QQP/{split}.tsv"
+        f = open(filename, 'r')
+        src = []
+        labels = []
+        for index, line in enumerate(f):
+            if index == 0:
+                continue
+            cols = line.strip().split('\t')
+            question = cols[3]
+            context = cols[4]
+            label = int(cols[5])
+            src.append(context + " " + question)
+            labels.append(label)
+
+        df = pd.DataFrame({"src": src, "label": labels})
+        return df
+    
+    elif task == 'sst-2':
+        filename = f"glue_data/SST-2/{split}.tsv"
+        f = open(filename, 'r')
+        src = []
+        labels = []
+        for index, line in enumerate(f):
+            if index == 0:
+                continue
+            cols = line.strip().split('\t')
+            sentence = cols[0]
+            label = int(cols[1])
+            src.append(sentence)
+            labels.append(label)
+        
+        df = pd.DataFrame({"src": src, "label": labels})
+        return df 
+
+    elif task == 'mrpc':
+        filename = f"msr_paraphrase_{split}.txt"
+        f = open(filename, 'r')
+        src = []
+        labels = []
+        for index, line in enumerate(f):
+            if index == 0:
+                continue 
+            cols = line.strip().split('\t')
+            label = int(cols[0])
+            sent1 = cols[3]
+            sent2 = cols[4]
+            src.append(sent1 + " " + sent2)
+            labels.append(label)
+        
+        df = pd.DataFrame({"src": src, "label": labels})
+        return df
+            
     elif task == "xnli":
         filename = f"../download/xnli/{split}-{language}.tsv"
         f = open(filename, 'r')
