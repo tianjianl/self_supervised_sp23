@@ -18,7 +18,7 @@ from rotk import Regularizer
 
 class BertForSequenceClassification(nn.Module):
 
-    def __init__(self, model_name, num_labels):
+    def __init__(self, model_name, num_labels, student_layer):
         super(BertForSequenceClassification, self).__init__()
         self.model = BertModel.from_pretrained(model_name)
         if 'small' in model_name:
@@ -29,38 +29,20 @@ class BertForSequenceClassification(nn.Module):
             hidden_size = 1024
         self.classifier_t = nn.Linear(hidden_size, num_labels)
         self.classifier_s = nn.Linear(hidden_size, num_labels)
-
-    def forward(self, input_ids, attention_mask, student_layer=0):
+        self.student_layer = student_layer
+    def forward(self, input_ids, attention_mask):
         
         output = self.model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
         hidden_states = output.hidden_states
 
         assert torch.equal(hidden_states[-1], output.last_hidden_state)
         mean_t = torch.mean(hidden_states[-1], dim=1)
-        mean_s = torch.mean(hidden_states[student_layer], dim=1)
+        mean_s = torch.mean(hidden_states[self.student_layer], dim=1)
 
         teacher_logits = self.classifier_t(mean_t)
         student_logits = self.classifier_s(mean_s)
 
         return teacher_logits, student_logits
-
-    def get_symm_kl(self, logits_a, input_b):
-        return (
-            F.kl_div(
-                F.log_softmax(logits_a, dim=-1, dtype=torch.float32),
-                F.softmax(logits_b, dim=-1, dtype=torch.float32),
-                None,
-                None,
-                "sum",
-            )
-            + F.kl_div(
-                F.log_softmax(logits_a, dim=-1, dtype=torch.float32),
-                F.softmax(logits_b, dim=-1, dtype=torch.float32),
-                None,
-                None,
-                "sum",
-            )
-        ) / noised_logits.size(0)
 
 class CustomClassificationDataset(Dataset):
 
@@ -100,6 +82,25 @@ def generate_binary_outcomes(probabilities):
     mask = logits >= probs
     return mask.to('cuda')
 
+
+def get_symm_kl(logits_a, logits_b):
+    return (F.kl_div(
+                F.log_softmax(logits_a, dim=-1, dtype=torch.float32),
+                F.softmax(logits_b, dim=-1, dtype=torch.float32),
+                None,
+                None,
+                "sum",
+            )
+            + F.kl_div(
+                F.log_softmax(logits_a, dim=-1, dtype=torch.float32),
+                F.softmax(logits_b, dim=-1, dtype=torch.float32),
+                None,
+                None,
+                "sum",
+            )
+        ) / logits_a.size(0)
+
+
 def weighted_dropout(params, probs):
     
     """
@@ -111,12 +112,13 @@ def weighted_dropout(params, probs):
     params = params * mask
     return params.view(param_shape)
 
-def train(epoch, tokenizer, model, device, loader, optimizer, scheduler=None, regularizer=None, param_importance_dict=None, wd_iter=0):
+def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=None, regularizer=None):
     
     model.train()
     start = time.time()
     loss_fn = nn.NLLLoss()
-    
+    wd_iter = args.weighted_dropout_iters
+
     #initializing parameter importance dictionary
     for iteration, data in enumerate(loader, 0):
         
@@ -128,6 +130,9 @@ def train(epoch, tokenizer, model, device, loader, optimizer, scheduler=None, re
         y_hat = output        
         y_hat = F.log_softmax(y_hat, dim=1)
         loss = loss_fn(y_hat, y)
+        if args.use_sd:
+            #self-distillation: symmetric kl divergence between teacher and student logits
+            loss += 0.5*get_symm_kl(output, output_student) 
         
         if regularizer != None:
             loss += regularizer.penalty(model, input_ids = x, attention_mask = x_mask) 
@@ -215,8 +220,8 @@ def train(epoch, tokenizer, model, device, loader, optimizer, scheduler=None, re
     end = time.time()
     print(f'Epoch: {epoch} used {end-start} seconds')
     
-def validate(epoch, tokenizer, model, device, val_loader):
-    
+def validate(epoch, tokenizer, model, device, val_loader, student=False):
+
     model.eval()
     predictions = []
     actuals = []
@@ -230,7 +235,10 @@ def validate(epoch, tokenizer, model, device, val_loader):
             y = data['label'].to(device, dtype = torch.long)
 
             output, output_student = model(input_ids = x, attention_mask = x_mask)
-            y_hat = output            
+            if student:
+                y_hat = output_student
+            else:
+                y_hat = output            
             y_hat = F.log_softmax(y_hat, dim=1)
             loss = loss_fn(y_hat, y)
             
@@ -281,7 +289,7 @@ def main(args):
     wandb.init(project=f"bert-glue-distillation", entity="dogtooooth", name=wandb_name)
 
     num_labels = label_dict[args.task]
-    model = BertForSequenceClassification(args.model_name, num_labels)
+    model = BertForSequenceClassification(args.model_name, num_labels, args.student_layer)
     model.to(device)
     tokenizer = BertTokenizer.from_pretrained(args.model_name)
 
@@ -343,17 +351,27 @@ def main(args):
         print(f"epoch = {epoch} | acc = {result['accuracy']}")
                    
     for epoch in range(args.epoch):
-        train(epoch, tokenizer, model, device, train_loader, optimizer, param_importance_dict=param_importance_dict, wd_iter=args.weighted_dropout_iters)
+        train(epoch, tokenizer, model, device, train_loader, optimizer, args)
         torch.save(model.state_dict(), f"{args.task}_latest.pth")
         
-        y_hat, y, dev_loss = validate(epoch, tokenizer, model, device, val_loader)       
+        flag = False
+        if args.use_sd:
+            flag = True
+        
+        y_hat, y, dev_loss = validate(epoch, tokenizer, model, device, val_loader, student=flag)       
+        
         if args.task == 'cola':
             result = matthews_metric.compute(references=y, predictions=y_hat) 
             print(f"epoch = {epoch} | mcc = {result['matthews_correlation']}")
- 
+
+        if args.task == 'mrpc' or args.task == 'qqp':
+            f1_result = f1_metric.compute(references=y, predictions=y_hat)
+            print(f"epoch = {epoch} | f1 = {f1_result['f1']}")
+
         result = acc.compute(references = y, predictions = y_hat)
         print(f"epoch = {epoch} | acc = {result['accuracy']}")
-
+        
+    
     if args.plot_params:
         num_layers = 12 if 'base' in args.model_name else 24
         for i in range(num_layers):
@@ -378,6 +396,9 @@ if __name__ == "__main__":
     parser.add_argument("--weighted_dropout_iters", type=int, default=0, help="interval for calculating weighted dropout")
     
     # distillation related
+    parser.add_argument("--use_sd", action='store_true', help="using teacher student self distillation")
+    parser.add_argument("--sd_alpha", type=float, default=0.5, help="self-distillation loss scale")
+    parser.add_argument("--use_id", action='store_true', help='using intra-distillation in teacher and student')
     parser.add_argument("--student_layer", default=8, type=int)
     args = parser.parse_args()
     
