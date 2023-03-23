@@ -1,6 +1,10 @@
 ## Getting Started
 `pip install -r requirements.txt`
 
+To download all of the GLUE data: 
+
+`python3 data_utils/download_glue_data.py`
+
 ## Training
 You can find training scripts at `scripts` folder
 
