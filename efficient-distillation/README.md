@@ -12,7 +12,7 @@ You can find training scripts at `scripts` folder
 
 | Model     | RTE   |  MRPC | CoLA | SST-2 |QNLI  | QQP | Avg. |
 |-----------|-------|-------|------|-------|------|-----| ---- |
-| BERT Base |       |  88.1 | 55.0 |       | 90.7 |     |      |
+| BERT Base |  66.4 |  88.1 | 55.0 |       | 90.7 |     |      |
 | BERT Large|       |       |      |       |      |     |      |
 
     
