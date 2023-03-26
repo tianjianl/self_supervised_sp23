@@ -1,0 +1,8 @@
+numpy
+pandas
+evaluate
+datasets
+argparse
+scikit-learn
+transformers
+wandb
