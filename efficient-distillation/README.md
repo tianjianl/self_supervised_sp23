@@ -18,7 +18,7 @@ You can find training scripts at `scripts` folder
 
 ## Self-Teaching RTE
 Embedding parameters = 768*(30000+2+512) = around 23M parameters 
-| Model  | Acc. | Appox. # of Parameters  |
+| Model  | Acc. | Approx. # of Parameters  |
 |------|:----:|:------------------------:|
 | Full 12 Layers  | 66.4 |           110M          |
 | First 8 Layers| 65.7  | 58M |
