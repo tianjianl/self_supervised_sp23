@@ -10,11 +10,17 @@ You can find training scripts at `scripts` folder
 
 ## Baselines
 
+### GLUE
+
 | Model     | RTE   | MRPC | CoLA | SST-2 |QNLI  | QQP | Avg. |
 |-----------|-------|-------|------|-------|------|-----| ---- |
 | BERT Base |  [66.4](https://wandb.ai/dogtooooth/bert-glue-distillation/runs/tqzux47h) |  [88.1](https://wandb.ai/dogtooooth/bert-glue-distillation/runs/7i9jk5x7) | [55.0](https://wandb.ai/dogtooooth/bert-glue-distillation/runs/5t6wzhx0) | [93.0](https://wandb.ai/dogtooooth/bert-glue-distillation/runs/tqzux47h)  | [90.7](https://wandb.ai/dogtooooth/bert-glue-distillation/runs/w5xy7qj5) |     |      |
 | BERT Large|       |       |      |       |      |     |      |
 
+### IWSLT 14 Machine Translation X-En
+|   | De | Ar | Fa | Es | He |
+|---|:--:|:--:|:--:|:--:|:--:|
+|transformer_iwslt_de_en | 32.75 | 28.95 | 38.74| 19.71| 34.30|
 
 ## Self-Teaching RTE
 Embedding parameters = 768*(30000+2+512) = around 23M parameters 
