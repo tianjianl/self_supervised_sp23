@@ -2,8 +2,7 @@ import os
 import openai
 from datasets import load_dataset
 
-openai.api_key = "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"
-
+openai.api_key = os.getenv("OPENAI_API_KEY")
 boolq = load_dataset("boolq")
 
 context = ""
