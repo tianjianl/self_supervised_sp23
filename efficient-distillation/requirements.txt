@@ -6,3 +6,5 @@ argparse
 scikit-learn
 transformers
 wandb
+matplotlib
+seaborn

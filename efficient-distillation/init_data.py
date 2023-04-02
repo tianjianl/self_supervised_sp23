@@ -74,7 +74,9 @@ def data_to_df(task, language, split):
         return df 
 
     elif task == 'mrpc':
-        filename = f"msr_paraphrase_{split}.txt"
+        if split != 'train':
+            split = 'test'
+        filename = f"glue_data/MRPC/msr_paraphrase_{split}.txt"
         f = open(filename, 'r')
         src = []
         labels = []

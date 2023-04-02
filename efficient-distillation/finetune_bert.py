@@ -7,6 +7,8 @@ import numpy as np
 import evaluate
 import datetime
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import cuda
@@ -112,6 +114,10 @@ def weighted_dropout(params, probs):
     params = params * mask
     return params.view(param_shape)
 
+
+fig, axes = plt.subplots(1, 7, sharey=True)
+fig.suptitle('Violin Plots of Parameter Importance')
+
 def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=None, regularizer=None):
     
     model.train()
@@ -144,6 +150,23 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
         loss.backward()
         optimizer.step()
         
+        
+        if iteration % 50 == 0:
+            all_scores = []
+            for name, params in model.named_parameters():
+                if 'embeddings' in name:
+                    continue
+                if params.grad == None:
+                    continue
+                grad = params.grad.clone().detach().view(-1)
+                p = params.clone().detach().view(-1)
+                scores = torch.abs(grad*p)
+                scores = scores.to('cpu')
+                all_scores.append(scores.tolist())
+            
+            sns.violinplot(data=all_scores, ax=axes[int(iteration/50)], orient="v")
+            axes[int(iteration/50)].set_title(f'Iteration {iteration}')
+            plt.savefig(f"{iteration}.pdf")
         if wd_iter == 0:
             continue
 
@@ -281,18 +304,23 @@ label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst-2': 2, 'sts-b': 2, 'qnli': 2,
 def main(args):
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    wandb_name = f"{args.lr}-{args.seed}-{args.task}-{args.regularizer}"
+    wandb_name = f"{args.lr}-{args.seed}-{args.task}-{args.student_layer}"
     if args.sage:
         wandb_name += '-sage'
     if args.weighted_dropout_iters > 0:
         wandb_name += f'-wd-{args.weighted_dropout_iters}'
-    wandb.init(project=f"bert-glue-distillation", entity="dogtooooth", name=wandb_name)
+    wandb.init(project=f"bert-large-glue-distillation", entity="dogtooooth", name=wandb_name)
 
+    for k, v in vars(args).items():
+        print(f"{k}: {v}")
+    
+ 
     num_labels = label_dict[args.task]
     model = BertForSequenceClassification(args.model_name, num_labels, args.student_layer)
     model.to(device)
     tokenizer = BertTokenizer.from_pretrained(args.model_name)
 
+    wandb.watch(model, log="all")
     torch.manual_seed(args.seed) # pytorch random seed
     np.random.seed(args.seed) # numpy random seed
     torch.backends.cudnn.deterministic = True
@@ -333,7 +361,6 @@ def main(args):
     if args.regularizer != None:
         regularizer = Regularizer(model = model, alpha = 1, dataset = train_loader, regularizer_type = args.regularizer)
     
-    wandb.watch(model, log="all")
     if args.epoch == -1 or args.load_checkpoint:
         epoch = -1
         model.load_state_dict(torch.load(f"./{args.task}_latest.pth"))   
@@ -386,7 +413,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", default=0.0001, type=float)
     parser.add_argument("--task", default='xnli')
     parser.add_argument("--seed", default=1104, type=int)
-    parser.add_argument("--model_name", default='bert-base-uncased')
+    parser.add_argument("--model_name", default='bert-large-uncased')
     parser.add_argument("--max_len", default=256, type=int)
     
     # regularizers, tricks, plots...
@@ -404,7 +431,4 @@ if __name__ == "__main__":
     
     assert args.model_name in ['bert-base-uncased', 'bert-large-uncased'], "This code base only support bert-base-uncased and bert-large-uncased"
 
-    for k, v in vars(args).items():
-        print(f"{k}: {v}")
-    
     main(args)
