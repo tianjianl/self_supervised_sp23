@@ -136,7 +136,7 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
         y_hat = output        
         y_hat = F.log_softmax(y_hat, dim=1)
         loss = loss_fn(y_hat, y)
-        if args.use_sd:
+        if args.use_sd and epoch != 0:
             #self-distillation: symmetric kl divergence between teacher and student logits
             loss += 0.5*get_symm_kl(output, output_student) 
         
