@@ -69,8 +69,8 @@ class Regularizer(object):
                     None,
                     "sum",
                     ) +
-            F.kl_div(F.softmax(input_logits, dim=-1, dtype=torch.float32),
-                    F.log_softmax(noised_logits, dim=-1, dtype=torch.float32),
+            F.kl_div(F.log_softmax(input_logits, dim=-1, dtype=torch.float32),
+                    F.softmax(noised_logits, dim=-1, dtype=torch.float32),
                     None,
                     None,
                     "sum",

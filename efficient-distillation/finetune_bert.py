@@ -115,8 +115,8 @@ def weighted_dropout(params, probs):
     return params.view(param_shape)
 
 
-fig, axes = plt.subplots(1, 7, sharey=True)
-fig.suptitle('Violin Plots of Parameter Importance')
+#fig, axes = plt.subplots(1, 7, sharey=True)
+#fig.suptitle('Violin Plots of Parameter Importance')
 
 def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=None, regularizer=None):
     
@@ -136,7 +136,7 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
         y_hat = output        
         y_hat = F.log_softmax(y_hat, dim=1)
         loss = loss_fn(y_hat, y)
-        if args.use_sd and epoch != 0:
+        if args.use_sd:# and epoch != 0:
             #self-distillation: symmetric kl divergence between teacher and student logits
             loss += 0.5*get_symm_kl(output, output_student) 
         
@@ -152,24 +152,34 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
         
         
         if iteration % 50 == 0:
-            all_scores = []
+            importances = [[] for _ in range(24)]
+            #update param_importance_dict
             for name, params in model.named_parameters():
-                if 'embeddings' in name:
+                layer_num = name.split('.')
+                if len(layer_num) <= 3 or layer_num[3].isnumeric() == False:
                     continue
-                if params.grad == None:
-                    continue
-                grad = params.grad.clone().detach().view(-1)
-                p = params.clone().detach().view(-1)
-                scores = torch.abs(grad*p)
-                scores = scores.to('cpu')
-                all_scores.append(scores.tolist())
+                else:
+                    layer_num = int(layer_num[3])
+                if params.requires_grad:
+                    grad = params.grad.clone().detach().view(-1)
+                    params = params.clone().detach().view(-1)
+                    score = torch.abs(grad*params)
+                    score = score.to("cpu")
+                    importances[layer_num].extend(score.tolist()) 
             
-            sns.violinplot(data=all_scores, ax=axes[int(iteration/50)], orient="v")
-            axes[int(iteration/50)].set_title(f'Iteration {iteration}')
-            plt.savefig(f"{iteration}.pdf")
+            newlist = []
+            for i in range(24):
+                newlist.append(np.mean(importances[i]))
+            
+            print(f"iteration = {iteration}")
+            print(newlist)
+            f = open('importances.txt', 'a+')
+            print(newlist, file=f) 
+
+
         if wd_iter == 0:
             continue
-
+    
         if iteration % weighted_dropout_iters == 0:
             for name, params in model.named_parameters():
                 if 'embeddings' in name:
