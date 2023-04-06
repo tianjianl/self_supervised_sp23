@@ -43,8 +43,8 @@ def generate_text(args):
 def make_prompt(args):
     dataset = load_dataset("boolq")
     examples = dataset["train"].shuffle(seed=args.seed)
-    prompt_yes = [f"QUESTION: {examples['question'][i]}  PASSAGE: {examples['passage'][i]}  ANSWER: {examples['answer'][i]}" for i in range(4) if examples['answer'][i] == True]
-    prompt_no = [f"QUESTION: {examples['question'][i]}  PASSAGE: {examples['passage'][i]}  ANSWER: {examples['answer'][i]}" for i in range(4) if examples['answer'][i] == False]
+    prompt_yes = [f"QUESTION: {examples['question'][i]}  PASSAGE: {examples['passage'][i]}  ANSWER: {examples['answer'][i]}" for i in range(2) if examples['answer'][i] == True]
+    prompt_no = [f"QUESTION: {examples['question'][i]}  PASSAGE: {examples['passage'][i]}  ANSWER: {examples['answer'][i]}" for i in range(2) if examples['answer'][i] == False]
     prompt = [p for pair in zip(prompt_yes, prompt_no) for p in pair]
     answers = [examples['answer'][i] for i in range(args.num_examples, args.num_examples+100)]
     new_examples = [f"QUESTION: {examples['question'][i]}  PASSAGE: {examples['passage'][i]}  ANSWER: " for i in range(args.num_examples, args.num_examples+100)]
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_length", type=int, default=1000)
     parser.add_argument("--num_return_sequences", type=int, default=1)
     parser.add_argument("--do_sample", type=bool, default=True)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=2)
     parser.add_argument("--max_new_tokens", type=int, default=10)
     parser.add_argument("--decoding_strategy", type=str, default="top_k", choices=["top_k", "top_p", "beam_search", "greedy"])
     parser.add_argument("--num_beams", type=int, default=5)

@@ -10,7 +10,6 @@
 #SBATCH --time=12:00:00
 #SBATCH --job-name="HW6 CS 601.471/671 homework"
 
-
 module load anaconda
 
 # init virtual environment if needed
