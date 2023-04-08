@@ -25,7 +25,7 @@ You can find training scripts at `scripts` folder
 |---|:--:|:--:|:--:|:--:|:--:|
 |transformer_iwslt_de_en | 32.75 | 28.95 | 38.74| 19.71| 34.30|
 
-## Self-Teaching RTE
+## Self-Teaching BERT-base
 Embedding parameters = 768*(30000+2+512) = around 23M parameters 
 | Model  | Acc. | Approx. # of Parameters  |
 |------|:----:|:------------------------:|
@@ -35,5 +35,15 @@ Embedding parameters = 768*(30000+2+512) = around 23M parameters
 |6 | 63.2| 44M | 
 | 5| 62.1 | 36M | 
 | 4| 56.0 | 29M |
+
+
+## Self-Teaching BERT-Large
+
+| Model| QNLI | Approx. # of Parameters |
+|------|:----:|:----------------------:|
+| Full 24 layers |  92.4 | 336M |
+| First 12 layers|  87.8  | 183M |
+| First 10 layers |  85.3  | 158M |
+
 
     
