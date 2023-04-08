@@ -138,8 +138,12 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
         loss = loss_fn(y_hat, y)
         if args.use_sd:# and epoch != 0:
             #self-distillation: symmetric kl divergence between teacher and student logits
-            loss += 0.5*get_symm_kl(output, output_student) 
-        
+            if args.gradual == False:
+                loss += get_symm_kl(output, output_student) 
+            else:
+                if epoch != 0:
+                    loss += get_symm_kl(output, output_student)
+
         if regularizer != None:
             loss += regularizer.penalty(model, input_ids = x, attention_mask = x_mask) 
         if iteration%50 == 0:
@@ -150,7 +154,7 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
         loss.backward()
         optimizer.step()
         
-        
+        """
         if iteration % 50 == 0:
             importances = [[] for _ in range(24)]
             #update param_importance_dict
@@ -175,7 +179,7 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
             print(newlist)
             f = open('importances.txt', 'a+')
             print(newlist, file=f) 
-
+        """
 
         if wd_iter == 0:
             continue
@@ -437,6 +441,7 @@ if __name__ == "__main__":
     parser.add_argument("--sd_alpha", type=float, default=0.5, help="self-distillation loss scale")
     parser.add_argument("--use_id", action='store_true', help='using intra-distillation in teacher and student')
     parser.add_argument("--student_layer", default=8, type=int)
+    parser.add_argument("--gradual", action='store_true', help='if set to be true, then the distillation loss is gradually added to the model')
     args = parser.parse_args()
     
     assert args.model_name in ['bert-base-uncased', 'bert-large-uncased'], "This code base only support bert-base-uncased and bert-large-uncased"
