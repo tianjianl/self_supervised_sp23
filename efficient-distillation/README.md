@@ -39,11 +39,11 @@ Embedding parameters = 768*(30000+2+512) = around 23M parameters
 
 ## Self-Teaching BERT-Large
 
-| Model| QNLI | Approx. # of Parameters |
-|------|:----:|:----------------------:|
-| Full 24 layers |  92.4 | 336M |
-| First 12 layers|  87.8  | 183M |
-| First 10 layers |  85.3  | 158M |
+| Model| QNLI | MRPC | Approx. # of Parameters |
+|------|:----:|:----:|:----------------------:|
+| Full 24 layers |  92.4 | 89.1 |336M |
+| First 12 layers|  87.8  | 84.6 | 183M |
+| First 10 layers |  85.3  | - | 158M |
 
 
     
