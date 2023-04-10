@@ -48,7 +48,6 @@ Embedding parameters = 768*(30000+2+512) = around 23M parameters
 | First 9 layers | - | - | 56.0 |  |
 | First 8 layers | - | - | 56.0 |  |
 
-| Fir
 
 
     
