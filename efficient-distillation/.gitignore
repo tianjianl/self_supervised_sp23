@@ -1,3 +1,4 @@
+bert.*.txt
 *.sh
 *.pth
 wandb/
