@@ -41,7 +41,7 @@ Embedding parameters = 768*(30000+2+512) = around 23M parameters
 
 | Model| QNLI | MRPC | RTE | SST-2 | Approx. # of Parameters |
 |------|:----:|:----:|:----:|:----:|:----------------------:|
-| Full 24 layers |  92.4 | 89.1 | - | - | 336M |
+| Full 24 layers |  92.4 | 89.1 | 72.6 | 94.2 | 336M |
 | First 12 layers|  87.8  | 84.6 | 53.4 | 89.1 | 183M |
 | First 11 layers | - | - | 55.6 | 89.0 |  |
 | First 10 layers |  85.3  | 81.1 | 54.5 | 88.2 | 158M |
