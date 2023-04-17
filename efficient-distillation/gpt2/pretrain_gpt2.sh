@@ -34,4 +34,4 @@ accelerate launch run_clm_no_trainer.py \
   --per_device_train_batch_size 1 \
   --per_device_eval_batch_size 1 \
   --gradient_accumulation_steps 64 \
-  --checkpointing_steps 4096 \
+  --checkpointing_steps 2000 \

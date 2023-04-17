@@ -32,6 +32,7 @@ class BertForSequenceClassification(nn.Module):
         self.classifier_t = nn.Linear(hidden_size, num_labels)
         self.classifier_s = nn.Linear(hidden_size, num_labels)
         self.student_layer = student_layer
+    
     def forward(self, input_ids, attention_mask):
         
         output = self.model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
@@ -74,17 +75,6 @@ class CustomClassificationDataset(Dataset):
             'label': tgt
         }
 
-
-param_importance_by_layer = [[] for _ in range(24)]
-
-def generate_binary_outcomes(probabilities):
-    
-    logits = torch.rand(len(probabilities))
-    probs = probabilities.clone().detach()
-    mask = logits >= probs
-    return mask.to('cuda')
-
-
 def get_symm_kl(logits_a, logits_b):
     return (F.kl_div(
                 F.log_softmax(logits_a, dim=-1, dtype=torch.float32),
@@ -94,29 +84,13 @@ def get_symm_kl(logits_a, logits_b):
                 "sum",
             )
             + F.kl_div(
-                F.log_softmax(logits_a, dim=-1, dtype=torch.float32),
-                F.softmax(logits_b, dim=-1, dtype=torch.float32),
+                F.log_softmax(logits_b, dim=-1, dtype=torch.float32),
+                F.softmax(logits_a, dim=-1, dtype=torch.float32),
                 None,
                 None,
                 "sum",
             )
         ) / logits_a.size(0)
-
-
-def weighted_dropout(params, probs):
-    
-    """
-    returns a params tensor that is the original value or 0 depending on its probability 
-    """
-    param_shape = params.shape
-    params = params.clone().view(-1)
-    mask = generate_binary_outcomes(probs)
-    params = params * mask
-    return params.view(param_shape)
-
-
-#fig, axes = plt.subplots(1, 7, sharey=True)
-#fig.suptitle('Violin Plots of Parameter Importance')
 
 def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=None, regularizer=None):
     
@@ -136,14 +110,11 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
         y_hat = output        
         y_hat = F.log_softmax(y_hat, dim=1)
         loss = loss_fn(y_hat, y)
-        if args.use_sd:# and epoch != 0:
+        
+        if args.use_sd:           
             #self-distillation: symmetric kl divergence between teacher and student logits
-            if args.gradual == False:
-                loss += get_symm_kl(output, output_student) 
-            else:
-                if epoch != 0:
-                    loss += get_symm_kl(output, output_student)
-
+            loss += args.sd_alpha*get_symm_kl(output, output_student) 
+        
         if regularizer != None:
             loss += regularizer.penalty(model, input_ids = x, attention_mask = x_mask) 
         if iteration%50 == 0:
@@ -318,12 +289,12 @@ label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst-2': 2, 'sts-b': 2, 'qnli': 2,
 def main(args):
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    wandb_name = f"{args.lr}-{args.seed}-{args.task}-{args.student_layer}"
+    wandb_name = f"{args.lr}-{args.seed}-{args.task}-{args.student_layer}-{args.sd_alpha}"
     if args.sage:
         wandb_name += '-sage'
     if args.weighted_dropout_iters > 0:
         wandb_name += f'-wd-{args.weighted_dropout_iters}'
-    wandb.init(project=f"bert-large-glue-distillation", entity="dogtooooth", name=wandb_name)
+    wandb.init(project=f"bert-base-glue-distillation", entity="dogtooooth", name=wandb_name)
 
     for k, v in vars(args).items():
         print(f"{k}: {v}")
@@ -441,7 +412,6 @@ if __name__ == "__main__":
     parser.add_argument("--sd_alpha", type=float, default=0.5, help="self-distillation loss scale")
     parser.add_argument("--use_id", action='store_true', help='using intra-distillation in teacher and student')
     parser.add_argument("--student_layer", default=8, type=int)
-    parser.add_argument("--gradual", action='store_true', help='if set to be true, then the distillation loss is gradually added to the model')
     args = parser.parse_args()
     
     assert args.model_name in ['bert-base-uncased', 'bert-large-uncased'], "This code base only support bert-base-uncased and bert-large-uncased"
