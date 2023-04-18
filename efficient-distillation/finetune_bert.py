@@ -323,7 +323,7 @@ def main(args):
         wandb_name += '-sage'
     if args.weighted_dropout_iters > 0:
         wandb_name += f'-wd-{args.weighted_dropout_iters}'
-    wandb.init(project=f"bert-large-glue-distillation", entity="dogtooooth", name=wandb_name)
+    wandb.init(project=f"bert-large-glue-distillation", entity="bismarckbamfo91", name=wandb_name)
 
     for k, v in vars(args).items():
         print(f"{k}: {v}")
