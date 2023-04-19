@@ -14,12 +14,11 @@
 module load anaconda
 
 # init virtual environment if needed
-conda create -n myenv python=3.7
 
 conda activate myenv # open the Python environment
-pip3 install -r requirements.txt
 
-srun python3 finetune_bert.py --task cola --use_sd --sd_alpha 0.3 --model bert-base-uncased --student_layer 8 --lr 0.000003 --bs 8 --seed 42 --epoch 20 --max_len 256 
-srun python3 finetune_bert.py --task cola --use_sd --sd_alpha 0.5 --model bert-base-uncased --student_layer 8 --lr 0.000003 --bs 8 --seed 42 --epoch 20 --max_len 256 
-srun python3 finetune_bert.py --task cola --use_sd --sd_alpha 0.7 --model bert-base-uncased --student_layer 8 --lr 0.000003 --bs 8 --seed 42 --epoch 20 --max_len 256 
-srun python3 finetune_bert.py --task cola --use_sd --sd_alpha 0.9 --model bert-base-uncased --student_layer 8 --lr 0.000003 --bs 8 --seed 42 --epoch 20 --max_len 256 
+srun python3 finetune_bert.py --task cola --use_sd --sd_alpha 0.5 --model bert-base-uncased --student_layer 8 --lr 0.000003 --bs 16 --seed 42 --epoch 20 --max_len 256 
+srun python3 finetune_bert.py --task cola --use_sd --sd_alpha 0.5 --model bert-base-uncased --student_layer 7 --lr 0.000003 --bs 16 --seed 42 --epoch 20 --max_len 256 
+srun python3 finetune_bert.py --task cola --use_sd --sd_alpha 0.5 --model bert-base-uncased --student_layer 6 --lr 0.000003 --bs 16 --seed 42 --epoch 20 --max_len 256 
+srun python3 finetune_bert.py --task cola --use_sd --sd_alpha 0.5 --model bert-base-uncased --student_layer 5 --lr 0.000003 --bs 16 --seed 42 --epoch 20 --max_len 256 
+srun python3 finetune_bert.py --task cola --use_sd --sd_alpha 0.5 --model bert-base-uncased --student_layer 4 --lr 0.000003 --bs 16 --seed 42 --epoch 20 --max_len 256 

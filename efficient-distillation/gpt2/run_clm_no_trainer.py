@@ -56,6 +56,7 @@ from transformers.utils import check_min_version, get_full_repo_name, send_examp
 from transformers.utils.versions import require_version
 
 
+
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.28.0.dev0")
 
@@ -593,6 +594,7 @@ def main():
             with accelerator.accumulate(model):
                 outputs = model(**batch)
                 loss = outputs.loss
+                
                 # We keep track of the loss at each epoch
                 if args.with_tracking:
                     total_loss += loss.detach().float()

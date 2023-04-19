@@ -199,7 +199,7 @@ def main(args):
         wandb_name += '-sage'
     if args.weighted_dropout_iters > 0:
         wandb_name += f'-wd-{args.weighted_dropout_iters}'
-    wandb.init(project=f"bert-base-glue-distillation", entity="dogtooooth", name=wandb_name)
+    wandb.init(project=f"{args.model_name}-glue-distillation-new", entity="dogtooooth", name=wandb_name)
 
     for k, v in vars(args).items():
         print(f"{k}: {v}")
@@ -265,7 +265,7 @@ def main(args):
                    
     for epoch in range(args.epoch):
         train(epoch, tokenizer, model, device, train_loader, optimizer, args)
-        torch.save(model.state_dict(), f"{args.task}_latest.pth")
+        torch.save(model.state_dict(), f"/scratch4/cs601/tli104/checkpoints/{args.task}_latest.pth")
         
         flag = False
         if args.use_sd:
@@ -296,7 +296,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed", default=1104, type=int)
     parser.add_argument("--model_name", default='bert-large-uncased')
     parser.add_argument("--max_len", default=256, type=int)
-    
+
     # regularizers, tricks, plots...
     parser.add_argument("--sage", action='store_true')
     parser.add_argument("--regularizer", default=None)
