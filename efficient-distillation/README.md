@@ -27,11 +27,12 @@ You can find training scripts at `scripts` folder
 
 ## Self-Teaching BERT-base
 Embedding parameters = 768*(30000+2+512) = around 23M parameters 
+Each layer about 7.5M parameters
 | Model           | RTE  | QNLI   | CoLA | MRPC | SST-2| QQP  |Approx. # of Parameters  |
 |-----------------|:----:|:------:|:----:|:----:|:----:|:----:|:------------------------:|
 | Full 12 Layers  | 66.4 | 90.7   | 55.0 | 88.1 | 93.0 | 90.2 |         110M             |
 | DistillBERT (Sanh et al. 2019)| 59.9| 89.2 | 51.3| 87.5| 91.3 | 88.5| 66M             | 
-| First 8 Layers  | 65.7 | 89.1   | 55.2 | 86.2 | 91.9 | 89.7 | 58M                     |
+| First 8 Layers  | 65.7 | 89.1   | 55.2 | 86.2 | 91.9 | 90.2 | 58M                     |
 | 7               | 63.5 | 88.1   | 51.2 | 85.6 | 91.3 |      |51M                      |
 |6                | 63.2 | 86.9   | 43.3 | 84.5 |     |     |44M                      | 
 | 5               | 62.1 |       |     |     |     |     |36M                      | 
@@ -39,6 +40,7 @@ Embedding parameters = 768*(30000+2+512) = around 23M parameters
 
 
 ## Self-Teaching BERT-Large
+Each layer around 13M parameters
 
 | Model| QNLI | MRPC | RTE | SST-2 | Approx. # of Parameters |
 |------|:----:|:----:|:----:|:----:|:----------------------:|
@@ -49,6 +51,14 @@ Embedding parameters = 768*(30000+2+512) = around 23M parameters
 | First 9 layers | - | - | 56.0 | 87.6 |  |
 | First 8 layers | - | - | 56.0 | 87.6 |  |
 
+## Gradual Self-Teaching BERT-Large 
 
-
+Schedule: 24-20, 20-16, 16-12
+| Model| CoLA (Mcc.) | RTE (Acc.) | Approx. # of Parameters |
+| -----|:-----------:|:----------:|:-----------------------:|
+| Full 24 Layers  | 61.3 | 72.6   |        336M             |
+| First 20 Layers | 58.6 | 71.1   |        254M             |
+| First 16 Layers | 60.4 |  70.0  |         203M            |
+| First 12 Layers | 31.0 |  63.9  |         183M            |
+| First 12 Layers w/o gradual| | 53.4 |         183M            |
     
