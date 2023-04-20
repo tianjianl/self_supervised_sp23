@@ -59,6 +59,6 @@ Schedule: 24-20, 20-16, 16-12
 | Full 24 Layers  | 61.3 | 72.6   |        336M             |
 | First 20 Layers | 58.6 | 71.1   |        254M             |
 | First 16 Layers | 60.4 |  70.0  |         203M            |
-| First 12 Layers | 31.0 |  63.9  |         183M            |
-| First 12 Layers w/o gradual| | 53.4 |         183M            |
+| First 12 Layers | **58.1** |  **63.9**  |         183M            |
+| First 12 Layers w/o gradual| 31.0 | 53.4 |         183M            |
     
