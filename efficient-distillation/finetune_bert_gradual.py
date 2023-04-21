@@ -188,7 +188,11 @@ def get_usadam_param_groups(model):
 label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst-2': 2, 'sts-b': 2, 'qnli': 2, 'qqp': 2}
 
 def main(args):
-    
+
+    torch.manual_seed(args.seed) # pytorch random seed
+    np.random.seed(args.seed) # numpy random seed
+    torch.backends.cudnn.deterministic = True
+ 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     wandb_name = f"{args.lr}-{args.seed}-{args.task}-{args.student_layer}-{args.sd_alpha}"
     if args.sage:
@@ -207,10 +211,7 @@ def main(args):
     tokenizer = BertTokenizer.from_pretrained(args.model_name)
 
     wandb.watch(model, log="all")
-    torch.manual_seed(args.seed) # pytorch random seed
-    np.random.seed(args.seed) # numpy random seed
-    torch.backends.cudnn.deterministic = True
-    
+   
     optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.lr) 
     
     acc = evaluate.load("accuracy")
@@ -252,9 +253,14 @@ def main(args):
         result = acc.compute(references = y, predictions = y_hat)
         print(f"epoch = {epoch} | acc = {result['accuracy']}")
     
-
+    
+    schedule = []
     if args.gradual: # this overrides args.student_layer 
-        schedule = [(24, 20), (20, 16), (16, 14), (14, 13), (13, 12)]
+        seq = args.schedule.split(',')
+        for index, layer in enumerate(seq):
+            if index != 0:
+                schedule.append((seq[index-1], seq[index]))
+        
         print(f"prune schedule = {schedule}")
         for teacher_layer, student_layer in schedule:
             for epoch in range(args.epoch):
@@ -317,6 +323,7 @@ if __name__ == "__main__":
     parser.add_argument("--id_alpha", type=float, default=0.5, help="intra-distillation scale")
     parser.add_argument("--student_layer", default=8, type=int)
     parser.add_argument("--gradual", action='store_true', help="gradually prune the top layers of teacher: 24 - 20 - 16 - 12")
+    parser.add_argument("--schedule", default='24,20,16,12')
     args = parser.parse_args()
     
     assert args.model_name in ['bert-base-uncased', 'bert-large-uncased'], "This code base only support bert-base-uncased and bert-large-uncased"
