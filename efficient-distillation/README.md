@@ -54,11 +54,11 @@ Each layer around 13M parameters
 ## Gradual Self-Teaching BERT-Large 
 
 Schedule: 24-20, 20-16, 16-12
-| Model| CoLA (Mcc.) | RTE (Acc.) | Approx. # of Parameters |
-| -----|:-----------:|:----------:|:-----------------------:|
-| Full 24 Layers  | 61.3 | 72.6   |        336M             |
-| First 20 Layers | 58.6 | 71.1   |        254M             |
-| First 16 Layers | 60.4 |  70.0  |         203M            |
-| First 12 Layers | **58.1** |  **63.9**  |         183M            |
-| First 12 Layers w/o gradual| 31.0 | 53.4 |         183M            |
+| Model| CoLA (Mcc.) | RTE (Acc.) | SST-2 |Approx. # of Parameters |
+| -----|:-----------:|:----------:|:-----:|:-----------------------:|
+| Full 24 Layers  | 61.3 | 72.6   | 94.2  | 336M             |
+| First 20 Layers | 58.6 | 71.1   | 92.8  | 254M             |
+| First 16 Layers | 60.4 |  70.0  | -      | 203M            |
+| First 12 Layers | **58.1** |  **63.9**  |  -     |  183M            |
+| First 12 Layers w/o gradual| 31.0 | 53.4 | 89.1   |  183M            |
     
