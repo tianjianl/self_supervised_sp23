@@ -189,7 +189,7 @@ def get_usadam_param_groups(model):
         ]
     return optimizer_parameters
 
-label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst-2': 2, 'sts-b': 2, 'qnli': 2, 'qqp': 2}
+label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst-2': 2, 'sts-b': 2, 'qnli': 2, 'qqp': 2, 'mnli': 3}
 
 def main(args):
     

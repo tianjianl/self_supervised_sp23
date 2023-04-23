@@ -37,6 +37,34 @@ def data_to_df(task, language, split):
 
         df = pd.DataFrame({"src": src, "label": labels})
         return df
+    
+    elif task == 'mnli':
+        task = task.upper()
+        if split == 'dev' or split == 'test':
+            split = split + '_matched'
+
+        filename = f"glue_data/{task}/{split}.tsv"
+        f = open(filename, 'r')
+        src = []
+        labels = []
+        for index, line in enumerate(f):
+            if index == 0:
+                continue
+            cols = line.strip().split('\t')
+            question = cols[8]
+            context = cols[9]
+            if cols[11] == 'entailment': 
+                label = 1
+            elif cols[11] == 'contradiction':
+                label = 0
+            else:
+                label = 2
+
+            src.append(context + " " + question)
+            labels.append(label)
+
+        df = pd.DataFrame({"src": src, "label": labels})
+        return df
      
     elif task == 'qqp':
         filename = f"glue_data/QQP/{split}.tsv"
@@ -72,6 +100,24 @@ def data_to_df(task, language, split):
         
         df = pd.DataFrame({"src": src, "label": labels})
         return df 
+    
+    elif task == 'sts-b':
+        filename = f"glue_data/STS-B/{split}.tsv"
+        f = open(filename, 'r')
+        s1 = []
+        s2 = []
+        scores = []
+
+        for index, line in enumerate(f):
+            if index == 0:
+                continue
+            cols = line.strip().split('\t')
+            s1.append(cols[7])
+            s2.append(cols[8])
+            scores.append(cols[9])
+
+        df = pd.Dataframe({"s1": s1, "s2": s2, "score": scores})
+        return df
 
     elif task == 'mrpc':
         if split != 'train':

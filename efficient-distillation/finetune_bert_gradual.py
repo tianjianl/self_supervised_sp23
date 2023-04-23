@@ -259,8 +259,8 @@ def main(args):
         seq = args.schedule.split(',')
         for index, layer in enumerate(seq):
             if index != 0:
-                schedule.append((seq[index-1], seq[index]))
-        
+                schedule.append((int(seq[index-1]), int(seq[index])))
+                                   
         print(f"prune schedule = {schedule}")
         for teacher_layer, student_layer in schedule:
             for epoch in range(args.epoch):
