@@ -72,6 +72,9 @@ def get_symm_kl(logits_a, logits_b):
             )
         ) / logits_a.size(0)
 
+def preprocess_function(examples, tokenizer):
+    return tokenizer(examples["text"], max_length = 128, truncation=True, padding=True)
+
 def train(epoch, tokenizer, model, loader, optimizer, accelerator):
     
     model.train()
@@ -82,6 +85,7 @@ def train(epoch, tokenizer, model, loader, optimizer, accelerator):
     #initializing parameter importance dictionary
     for iteration, data in enumerate(loader, 0):
         
+        print(data)
         x = data['source_ids']
         x_mask = data['source_mask']
         y = data['label']
@@ -142,7 +146,7 @@ def validate(tokenizer, model, val_loader):
 def main(args):
     
     wandb_name = f"{args.lr}-{args.seed}-{args.student_layer}"
-    wandb.init(project=f"bert-continue-pretraine", entity="dogtooooth", name=wandb_name)
+    wandb.init(project=f"bert-continue-pretrain", entity="dogtooooth", name=wandb_name)
     accelerator = Accelerator()
     device = accelerator.device
     
@@ -164,23 +168,26 @@ def main(args):
     dataset = load_dataset("bookcorpus")
     
     train_dataset = dataset['train']
-    val_dataset = dataset['valid']
+    
+    def preprocess_function(examples):
+        return tokenizer(examples["text"], max_length = 512, truncation=True, padding=True)
+
+    encoded_train_dataset = train_dataset.map(preprocess_function, batched=True)
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm_probability=0.15)
     optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.lr) 
     
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, collate_fn=data_collator)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, collate_fn=data_collator)
+    train_loader = DataLoader(encoded_train_dataset, batch_size=32, shuffle=True, collate_fn=data_collator)
+    
 
-    model, optimizer, train_loader, val_loader = accelerator.prepare(
-        model, optimizer, train_loader, val_loader
+    model, optimizer, train_loader = accelerator.prepare(
+        model, optimizer, train_loader
     )
 
     for epoch in range(args.epoch):
         train(epoch, tokenizer, model, train_loader, optimizer, accelerator)
-        teacher_valid_ppl, student_val_ppl = validate(tokenizer, model, val_loader)
         print(f"teacher val ppl {teacher_valid_ppl} | student val ppl {student_val_ppl}")
-        torch.save(model.state_dict(), f"/scratch4/cs601/tli104/bert-checkpoints/bert-large-bookcorpus-{epoch}.pt")
+        torch.save(model.state_dict(), f"/bert-checkpoints/bert-large-bookcorpus-{epoch}.pt")
     model.push_to_hub("bert-large-bookcorpus")
 
 if __name__ == "__main__":
