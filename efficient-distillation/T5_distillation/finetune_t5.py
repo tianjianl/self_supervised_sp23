@@ -35,14 +35,6 @@ def remove_sentinel_tokens(text):
     
     return re.sub('<.*?>', '', text)
 
-pawsx_verbalizer = {'english': ['yes', 'no'],
-                    'chinese': ['是', '否'],
-                    'french': ['oui', 'non'],
-                    'spanish': ['si', 'no'],
-                    'german': ['ja', 'nein'],
-                    'japanese': ['はい', 'いいえ'],
-                    'korean': ['예', '아니요']}
-
 def init_data(args, split):
 
     src_doc = f"/scratch4/cs601/tli104/WikiLingua_data_splits/english/{split}.src.en"
@@ -60,7 +52,10 @@ def init_data(args, split):
     assert len(src) == len(tgt), f"size of source and target mismatch"
     df = pd.DataFrame(list(zip(src, tgt)), columns=['src', 'tgt'])
     print(df.head(5))
-    return df
+    if split != 'train':
+        return df.head(200)
+    else:
+        return df
 
 class CustomDataset(Dataset):
 
@@ -97,7 +92,7 @@ class CustomDataset(Dataset):
             'target_ids_y': target_ids.to(dtype=torch.long)
         }
 
-
+param_importance_dict = {'encoder': [[] for _ in range (24)], 'decoder':[[] for _ in range(24)]}
 def train(epoch, tokenizer, model, device, loader, optimizer, task='tg', val_loader=None):
 
     start = time.time()
@@ -119,9 +114,33 @@ def train(epoch, tokenizer, model, device, loader, optimizer, task='tg', val_loa
         if iteration%100 == 0 and val_loader != None:
             #printing the validation loss to a file
             _ = validate(1, tokenizer, model, device, val_loader, get_val_loss=True, task=task)
-                
+        
+
         optimizer.zero_grad()
         loss.backward()
+        
+        # Getting parameter importance by layer
+        if iteration % 500 == 0:
+            for n, p in model.named_parameters():
+                n = n.split('.')
+                if len(n) >= 4:
+                    component = n[0]
+                    layer = int(n[2])
+                else:
+                    continue
+                grad = p.grad.detach().clone()
+                params = p.detach().clone()
+                scores = torch.abs(grad*params)
+                scores = scores.view(-1)
+                scores = scores.to('cpu')
+
+                param_importance_dict[component][layer].append(scores.tolist())
+                
+
+            for comp in ['encoder', 'decoder']:
+                for i in range(24):
+                    print(f"{iteration} | {comp} | {i} | {np.mean(param_importance_dict[comp][i])}")
+                    param_importance_dict[comp][i] = []
         optimizer.step()
         end = time.time()
     
@@ -302,7 +321,7 @@ if __name__ == '__main__':
 
     #basic arguments
     parser.add_argument("--epoch", default=10, type=int, help="the training epochs")
-    parser.add_argument("--lr", default=0.00001, type=float, help="learning rate")
+    parser.add_argument("--lr", default=0.000001, type=float, help="learning rate")
     parser.add_argument("--bs", default=8, type=int, help="batch size")
     parser.add_argument("--task", default='pos', help="the task you want to finetune on")
     parser.add_argument("--output_len", default=64, type=int, help="the ouptut length")
