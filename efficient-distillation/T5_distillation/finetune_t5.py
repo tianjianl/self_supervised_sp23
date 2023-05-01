@@ -43,11 +43,13 @@ def init_data(args, split):
     tgt = []
     f = open(src_doc, 'r')
     for line in f:
-        src.append(line.strip())
+        line = line.strip()
+        src.append(line + ' <extra_id_0>')
     f.close()
     f = open(tgt_doc, 'r')
     for line in f:
-        tgt.append(line.strip())
+        line = line.strip()
+        tgt.append('<extra_id_0> ' + line)
     f.close()
     assert len(src) == len(tgt), f"size of source and target mismatch"
     df = pd.DataFrame(list(zip(src, tgt)), columns=['src', 'tgt'])
@@ -134,7 +136,7 @@ def train(epoch, tokenizer, model, device, loader, optimizer, task='tg', val_loa
                 scores = scores.view(-1)
                 scores = scores.to('cpu')
 
-                param_importance_dict[component][layer].append(scores.tolist())
+                param_importance_dict[component][layer].extend(scores.tolist())
                 
 
             for comp in ['encoder', 'decoder']:
@@ -307,7 +309,7 @@ def main(args):
     for epoch in range(config.TRAIN_EPOCHS):
         train(epoch, tokenizer, model, device, training_loader, optimizer)
         predictions, actuals = validate(epoch, tokenizer, model, device, val_loader)
-        _ = evaluate_func(epoch, predictions, actuals, tokenizer, model)
+        prev_best = evaluate_func(epoch, predictions, actuals, tokenizer, model, prev_best)
         final_df = pd.DataFrame({'Generated Text': predictions,'Actual Text': actuals})
         print(final_df.head(5))
     
