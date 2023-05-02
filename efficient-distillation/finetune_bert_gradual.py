@@ -20,7 +20,7 @@ from rotk import Regularizer
 
 class BertForSequenceClassification(nn.Module):
 
-    def __init__(self, model_name, num_labels, student_layer):
+    def __init__(self, model_name, num_labels):
         super(BertForSequenceClassification, self).__init__()
         self.model = BertModel.from_pretrained(model_name)
         if 'small' in model_name:
@@ -31,16 +31,16 @@ class BertForSequenceClassification(nn.Module):
             hidden_size = 1024
         self.classifier_t = nn.Linear(hidden_size, num_labels)
         self.classifier_s = nn.Linear(hidden_size, num_labels)
-        self.student_layer = student_layer
-    
-    def forward(self, input_ids, attention_mask):
+        
+    def forward(self, input_ids, attention_mask, teacher_layer, student_layer):
         
         output = self.model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
         hidden_states = output.hidden_states
 
         assert torch.equal(hidden_states[-1], output.last_hidden_state)
-        mean_t = torch.mean(hidden_states[-1], dim=1)
-        mean_s = torch.mean(hidden_states[self.student_layer], dim=1)
+        
+        mean_t = torch.mean(hidden_states[teacher_layer-1], dim=1)
+        mean_s = torch.mean(hidden_states[student_layer-1], dim=1)
 
         teacher_logits = self.classifier_t(mean_t)
         student_logits = self.classifier_s(mean_s)
@@ -92,12 +92,11 @@ def get_symm_kl(logits_a, logits_b):
             )
         ) / logits_a.size(0)
 
-def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=None, regularizer=None):
+def train(epoch, tokenizer, model, device, loader, optimizer, args, teacher_layer, student_layer):
     
     model.train()
     start = time.time()
     loss_fn = nn.NLLLoss()
-    wd_iter = args.weighted_dropout_iters
 
     #initializing parameter importance dictionary
     for iteration, data in enumerate(loader, 0):
@@ -106,7 +105,7 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
         x_mask = data['source_mask'].to(device, dtype=torch.long)
         y = data['label'].to(device)
         
-        output, output_student = model(input_ids=x, attention_mask=x_mask)
+        output, output_student = model(input_ids=x, attention_mask=x_mask, teacher_layer=teacher_layer, student_layer=student_layer)
         y_hat = output        
         y_hat = F.log_softmax(y_hat, dim=1)
         loss = loss_fn(y_hat, y)
@@ -116,13 +115,10 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
             loss += args.sd_alpha*get_symm_kl(output, output_student) 
         
         if args.use_id:
-            output_2, output_student_2 = model(input_ids=x, attention_mask=x_mask)
+            output_2, output_student_2 = model(input_ids=x, attention_mask=x_mask, teacher_layer=teacher_layer, student_layer=student_layer)
             loss += args.id_alpha*get_symm_kl(output, output_2)
-
-        if regularizer != None:
-            loss += regularizer.penalty(model, input_ids=x, attention_mask=x_mask) 
         
-        if iteration%50 == 0:
+        if iteration%200 == 0:
             wandb.log({"Training Loss": loss.item()})
             print(f'Epoch: {epoch}, Iteration: {iteration}, Loss:  {loss.item()}')
         
@@ -133,7 +129,7 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
     end = time.time()
     print(f'Epoch: {epoch} used {end-start} seconds')
     
-def validate(epoch, tokenizer, model, device, val_loader, student=False):
+def validate(epoch, tokenizer, model, device, val_loader, teacher_layer, student_layer, student=False):
 
     model.eval()
     predictions = []
@@ -147,7 +143,7 @@ def validate(epoch, tokenizer, model, device, val_loader, student=False):
             x_mask = data['source_mask'].to(device, dtype = torch.long)
             y = data['label'].to(device, dtype = torch.long)
 
-            output, output_student = model(input_ids = x, attention_mask = x_mask)
+            output, output_student = model(input_ids = x, attention_mask = x_mask, teacher_layer=teacher_layer, student_layer=student_layer)
             if student:
                 y_hat = output_student
             else:
@@ -189,40 +185,34 @@ def get_usadam_param_groups(model):
         ]
     return optimizer_parameters
 
-label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst-2': 2, 'sts-b': 2, 'qnli': 2, 'qqp': 2, 'mnli': 3}
+label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst-2': 2, 'sts-b': 2, 'qnli': 2, 'qqp': 2}
 
 def main(args):
-    
+
+    torch.manual_seed(args.seed) # pytorch random seed
+    np.random.seed(args.seed) # numpy random seed
+    torch.backends.cudnn.deterministic = True
+ 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     wandb_name = f"{args.lr}-{args.seed}-{args.task}-{args.student_layer}-{args.sd_alpha}"
     if args.sage:
         wandb_name += '-sage'
     if args.weighted_dropout_iters > 0:
         wandb_name += f'-wd-{args.weighted_dropout_iters}'
-    wandb.init(project=f"bert-large-glue-distillation", entity="bismarckbamfo91", name=wandb_name)
+    wandb.init(project=f"bert-gradual", entity="dogtooooth", name=wandb_name)
 
     for k, v in vars(args).items():
         print(f"{k}: {v}")
     
  
     num_labels = label_dict[args.task]
-    model = BertForSequenceClassification(args.model_name, num_labels, args.student_layer)
+    model = BertForSequenceClassification(args.model_name, num_labels)
     model.to(device)
     tokenizer = BertTokenizer.from_pretrained(args.model_name)
 
     wandb.watch(model, log="all")
-    torch.manual_seed(args.seed) # pytorch random seed
-    np.random.seed(args.seed) # numpy random seed
-    torch.backends.cudnn.deterministic = True
-    
-    
-    if args.sage:
-        print(f"--sage marker detected, using AdamW with lr adaptive to param importance")
-        from bert_optim import UnstructAwareAdamW
-        optimizer_parameters = get_usadam_param_groups(model)
-        optimizer = UnstructAwareAdamW(params=optimizer_parameters, lr=args.lr)
-    else:
-        optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.lr) 
+   
+    optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.lr) 
     
     acc = evaluate.load("accuracy")
     matthews_metric = evaluate.load("matthews_correlation")
@@ -262,34 +252,58 @@ def main(args):
 
         result = acc.compute(references = y, predictions = y_hat)
         print(f"epoch = {epoch} | acc = {result['accuracy']}")
-                   
-    for epoch in range(args.epoch):
-        train(epoch, tokenizer, model, device, train_loader, optimizer, args)
-        torch.save(model.state_dict(), f"/scratch4/cs601/tli104/checkpoints/{args.task}_latest.pth")
-        
-        flag = False
-        if args.use_sd:
-            flag = True
-        
-        y_hat, y, dev_loss = validate(epoch, tokenizer, model, device, val_loader, student=flag)       
-        
-        if args.task == 'cola':
-            result = matthews_metric.compute(references=y, predictions=y_hat) 
-            print(f"epoch = {epoch} | mcc = {result['matthews_correlation']}")
+    
+    
+    schedule = []
+    if args.gradual: # this overrides args.student_layer 
+        seq = args.schedule.split(',')
+        for index, layer in enumerate(seq):
+            if index != 0:
+                schedule.append((int(seq[index-1]), int(seq[index])))
+                                   
+        print(f"prune schedule = {schedule}")
+        for teacher_layer, student_layer in schedule:
+            for epoch in range(args.epoch):
+                train(epoch, tokenizer, model, device, train_loader, optimizer, args, teacher_layer=teacher_layer, student_layer=student_layer)
+                torch.save(model.state_dict(), f"/scratch4/cs601/tli104/checkpoints/{args.task}_gradual_{student_layer}.pth")
+                y_hat, y, dev_loss = validate(epoch, tokenizer, model, device, 
+                                              val_loader, teacher_layer=teacher_layer, student_layer=student_layer, student=True)
+                if args.task == 'cola':
+                    result = matthews_metric.compute(references=y, predictions=y_hat) 
+                    print(f"epoch = {epoch} | mcc = {result['matthews_correlation']}")
+                if args.task == 'mrpc' or args.task == 'qqp':
+                    f1_result = f1_metric.compute(references=y, predictions=y_hat)
+                    print(f"epoch = {epoch} | f1 = {f1_result['f1']}")
+                result = acc.compute(references = y, predictions = y_hat)
+                print(f"epoch = {epoch} | student = {student_layer} | acc = {result['accuracy']}")
+    else:
+        for epoch in range(args.epoch):
+            teacher_layer = 12 if args.model_name == 'bert-base-uncased' else 24
+            train(epoch, tokenizer, model, device, train_loader, optimizer, args, teacher_layer=teacher_layer, student_layer=args.student_layer)
+            torch.save(model.state_dict(), f"/scratch4/cs601/tli104/checkpoints/{args.task}_latest.pth")
+            
+            flag = True if args.use_sd else False
+            y_hat, y, dev_loss = validate(epoch, tokenizer, model, device, val_loader, teacher_layer=teacher_layer, student_layer=args.student_layer, 
+                                        student=flag)       
+            
+            if args.task == 'cola':
+                result = matthews_metric.compute(references=y, predictions=y_hat) 
+                print(f"epoch = {epoch} | mcc = {result['matthews_correlation']}")
 
-        if args.task == 'mrpc' or args.task == 'qqp':
-            f1_result = f1_metric.compute(references=y, predictions=y_hat)
-            print(f"epoch = {epoch} | f1 = {f1_result['f1']}")
+            if args.task == 'mrpc' or args.task == 'qqp':
+                f1_result = f1_metric.compute(references=y, predictions=y_hat)
+                print(f"epoch = {epoch} | f1 = {f1_result['f1']}")
 
-        result = acc.compute(references = y, predictions = y_hat)
-        print(f"epoch = {epoch} | acc = {result['accuracy']}")
+            result = acc.compute(references = y, predictions = y_hat)
+            print(f"epoch = {epoch} | acc = {result['accuracy']}")
         
+
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # basic training arguments
     parser.add_argument("--load_checkpoint", action='store_true')
-    parser.add_argument("--epoch", default=15, type=int)
+    parser.add_argument("--epoch", default=10, type=int)
     parser.add_argument("--bs", default=32, type=int)
     parser.add_argument("--lr", default=0.0001, type=float)
     parser.add_argument("--task", default='xnli')
@@ -308,6 +322,8 @@ if __name__ == "__main__":
     parser.add_argument("--use_id", action='store_true', help='using intra-distillation in teacher and student')
     parser.add_argument("--id_alpha", type=float, default=0.5, help="intra-distillation scale")
     parser.add_argument("--student_layer", default=8, type=int)
+    parser.add_argument("--gradual", action='store_true', help="gradually prune the top layers of teacher: 24 - 20 - 16 - 12")
+    parser.add_argument("--schedule", default='24,20,16,12')
     args = parser.parse_args()
     
     assert args.model_name in ['bert-base-uncased', 'bert-large-uncased'], "This code base only support bert-base-uncased and bert-large-uncased"
