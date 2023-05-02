@@ -222,7 +222,7 @@ def evaluate_func(epoch, predictions, actuals, tokenizer, model, prev_best):
     if np.mean(rl) > prev_best:
         print(f"found best validation rouge-l score {np.mean(r2)} at epoch {epoch}")
         prev_best = np.mean(rl)
-        torch.save(model.state_dict(), f"./t5_cnndm_best.pth")
+        torch.save(model.state_dict(), f"/scratch4/cs601/tli104/t5-checkpoints/t5_wikilingua_best.pth")
         print(f"epoch = {epoch}|r1 = {np.mean(r1)} r2 = {np.mean(r2)} rl = {np.mean(rl)}")
     
     return prev_best

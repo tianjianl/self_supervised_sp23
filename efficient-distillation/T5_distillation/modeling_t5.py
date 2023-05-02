@@ -954,6 +954,8 @@ class T5Stack(T5PreTrainedModel):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
+        start_layer=0,
+        end_layer=None
     ):
         # Model parallel
         if self.model_parallel:
@@ -1037,8 +1039,15 @@ class T5Stack(T5PreTrainedModel):
         encoder_decoder_position_bias = None
 
         hidden_states = self.dropout(inputs_embeds)
+        
+        if end_layer == None:
+            blocks = self.block[start_layer:]
+            key_values = past_key_values[start_layer]
+        else:
+            blocks = self.block[start_layer:end_layer]
+            key_values = past_key_values[start_layer:end_layer]
 
-        for i, (layer_module, past_key_value) in enumerate(zip(self.block, past_key_values)):
+        for i, (layer_module, past_key_value) in enumerate(zip(blocks, key_values)):
             layer_head_mask = head_mask[i]
             cross_attn_layer_head_mask = cross_attn_head_mask[i]
             # Model parallel
@@ -1423,6 +1432,8 @@ class T5Model(T5PreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        encoder_start_layer: Optional[int] = 0,
+        decoder_end_layer: Optional[int] = None
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqModelOutput]:
         r"""
         Returns:
@@ -1467,6 +1478,7 @@ class T5Model(T5PreTrainedModel):
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states,
                 return_dict=return_dict,
+                start_layer=encoder_start_layer
             )
         elif return_dict and not isinstance(encoder_outputs, BaseModelOutput):
             encoder_outputs = BaseModelOutput(
@@ -1502,6 +1514,7 @@ class T5Model(T5PreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            end_layer=decoder_end_layer
         )
 
         if not return_dict:
@@ -1632,6 +1645,8 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        encoder_start_layer: Optional[int] = None,
+        decoder_start_layer: Optional[int] = None
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         r"""
         labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
