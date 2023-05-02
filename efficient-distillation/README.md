@@ -27,7 +27,7 @@ You can find training scripts at `scripts` folder
 
 ## Self-Teaching BERT-base
 Embedding parameters = 768*(30000+2+512) = around 23M parameters 
-| Model  | Acc. | Approx. # of Parameters  |
+| Model  | RTE | Approx. # of Parameters  |
 |------|:----:|:------------------------:|
 | Full 12 Layers  | 66.4 |           110M          |
 | First 8 Layers| 65.7  | 58M |
@@ -39,11 +39,15 @@ Embedding parameters = 768*(30000+2+512) = around 23M parameters
 
 ## Self-Teaching BERT-Large
 
-| Model| QNLI | MRPC | Approx. # of Parameters |
-|------|:----:|:----:|:----------------------:|
-| Full 24 layers |  92.4 | 89.1 |336M |
-| First 12 layers|  87.8  | 84.6 | 183M |
-| First 10 layers |  85.3  | 81.1 | 158M |
+| Model| QNLI | MRPC | RTE | SST-2 | Approx. # of Parameters |
+|------|:----:|:----:|:----:|:----:|:----------------------:|
+| Full 24 layers |  92.4 | 89.1 | 72.6 | 94.2 | 336M |
+| First 12 layers|  87.8  | 84.6 | 53.4 | 89.1 | 183M |
+| First 11 layers | - | - | 55.6 | 89.0 |  |
+| First 10 layers |  85.3  | 81.1 | 54.5 | 88.2 | 158M |
+| First 9 layers | - | - | 56.0 | 87.6 |  |
+| First 8 layers | - | - | 56.0 | 87.6 |  |
+
 
 
     

@@ -32,6 +32,7 @@ class BertForSequenceClassification(nn.Module):
         self.classifier_t = nn.Linear(hidden_size, num_labels)
         self.classifier_s = nn.Linear(hidden_size, num_labels)
         self.student_layer = student_layer
+    
     def forward(self, input_ids, attention_mask):
         
         output = self.model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
@@ -74,17 +75,6 @@ class CustomClassificationDataset(Dataset):
             'label': tgt
         }
 
-
-param_importance_by_layer = [[] for _ in range(24)]
-
-def generate_binary_outcomes(probabilities):
-    
-    logits = torch.rand(len(probabilities))
-    probs = probabilities.clone().detach()
-    mask = logits >= probs
-    return mask.to('cuda')
-
-
 def get_symm_kl(logits_a, logits_b):
     return (F.kl_div(
                 F.log_softmax(logits_a, dim=-1, dtype=torch.float32),
@@ -94,29 +84,13 @@ def get_symm_kl(logits_a, logits_b):
                 "sum",
             )
             + F.kl_div(
-                F.log_softmax(logits_a, dim=-1, dtype=torch.float32),
-                F.softmax(logits_b, dim=-1, dtype=torch.float32),
+                F.log_softmax(logits_b, dim=-1, dtype=torch.float32),
+                F.softmax(logits_a, dim=-1, dtype=torch.float32),
                 None,
                 None,
                 "sum",
             )
         ) / logits_a.size(0)
-
-
-def weighted_dropout(params, probs):
-    
-    """
-    returns a params tensor that is the original value or 0 depending on its probability 
-    """
-    param_shape = params.shape
-    params = params.clone().view(-1)
-    mask = generate_binary_outcomes(probs)
-    params = params * mask
-    return params.view(param_shape)
-
-
-#fig, axes = plt.subplots(1, 7, sharey=True)
-#fig.suptitle('Violin Plots of Parameter Importance')
 
 def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=None, regularizer=None):
     
@@ -128,132 +102,34 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
     #initializing parameter importance dictionary
     for iteration, data in enumerate(loader, 0):
         
-        x = data['source_ids'].to(device, dtype = torch.long)
-        x_mask = data['source_mask'].to(device, dtype = torch.long)
+        x = data['source_ids'].to(device, dtype=torch.long)
+        x_mask = data['source_mask'].to(device, dtype=torch.long)
         y = data['label'].to(device)
         
-        output, output_student = model(input_ids = x, attention_mask = x_mask)
+        output, output_student = model(input_ids=x, attention_mask=x_mask)
         y_hat = output        
         y_hat = F.log_softmax(y_hat, dim=1)
         loss = loss_fn(y_hat, y)
-        if args.use_sd:# and epoch != 0:
+        
+        if args.use_sd:           
             #self-distillation: symmetric kl divergence between teacher and student logits
-            if args.gradual == False:
-                loss += get_symm_kl(output, output_student) 
-            else:
-                if epoch != 0:
-                    loss += get_symm_kl(output, output_student)
+            loss += args.sd_alpha*get_symm_kl(output, output_student) 
+        
+        if args.use_id:
+            output_2, output_student_2 = model(input_ids=x, attention_mask=x_mask)
+            loss += args.id_alpha*get_symm_kl(output, output_2)
 
         if regularizer != None:
-            loss += regularizer.penalty(model, input_ids = x, attention_mask = x_mask) 
+            loss += regularizer.penalty(model, input_ids=x, attention_mask=x_mask) 
+        
         if iteration%50 == 0:
             wandb.log({"Training Loss": loss.item()})
             print(f'Epoch: {epoch}, Iteration: {iteration}, Loss:  {loss.item()}')
         
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        loss.backward() # backprop gradient 
+        optimizer.step() # update parameters
         
-        """
-        if iteration % 50 == 0:
-            importances = [[] for _ in range(24)]
-            #update param_importance_dict
-            for name, params in model.named_parameters():
-                layer_num = name.split('.')
-                if len(layer_num) <= 3 or layer_num[3].isnumeric() == False:
-                    continue
-                else:
-                    layer_num = int(layer_num[3])
-                if params.requires_grad:
-                    grad = params.grad.clone().detach().view(-1)
-                    params = params.clone().detach().view(-1)
-                    score = torch.abs(grad*params)
-                    score = score.to("cpu")
-                    importances[layer_num].extend(score.tolist()) 
-            
-            newlist = []
-            for i in range(24):
-                newlist.append(np.mean(importances[i]))
-            
-            print(f"iteration = {iteration}")
-            print(newlist)
-            f = open('importances.txt', 'a+')
-            print(newlist, file=f) 
-        """
-
-        if wd_iter == 0:
-            continue
-    
-        if iteration % weighted_dropout_iters == 0:
-            for name, params in model.named_parameters():
-                if 'embeddings' in name:
-                    continue
-                    
-                if params.requires_grad:
-                    grad = params.grad.clone().detach().view(-1)
-                    p = params.clone().detach().view(-1)
-                    scores = torch.abs(grad*p)
-                    scores = scores.to("cpu")
-                    scaled_scores = scores - scores.min()
-                    scaled_scores /= scores.max()
-                    #perform weighted dropout, the probability that a certain parameter is masked is larger if it is more important
-                    params = weighted_dropout(params, scaled_scores)
-        """   
-        if iteration%200 == 0 and param_importance_dict != None:
-            
-            importances = [[] for _ in range(24)]
-            #update param_importance_dict
-            for name, params in model.named_parameters():
-                layer_num = name.split('.')
-                if len(layer_num) <= 3 or layer_num[3].isnumeric() == False:
-                    continue
-                else:
-                    layer_num = int(layer_num[3])
-                if params.requires_grad:
-                    grad = params.grad.clone().detach().view(-1)
-                    params = params.clone().detach().view(-1)
-                    score = torch.abs(grad*params)
-                    score = score.to("cpu")
-                    importances[layer_num - 1].extend(score.tolist())        
-                    # mu = torch.mean(score)
-                    # sigma = torch.std(score)
-                    # param_importance_dict[name].append((mu.item(), sigma.item()))
-            
-            # temp = sorted(param_importance_dict.items(), key=lambda x:x[1][-1][0])
-            
-            # for item in temp:
-            
-            #    print(item[0])
-            #    print(f"mean = {param_importance_dict[item[0]][-1][0]}")
-            #    print(f"std = {param_importance_dict[item[0]][-1][1]}")
-            
-            normalized_importances = []          
-            for i in range(1, 25):
-                layer_importance = np.mean(importances[i-1])
-                param_importance_by_layer[i-1].append(layer_importance)
-                print(f"layer {i}, score {layer_importance}")
-                normalized_importances.append(layer_importance)
-            
-            normalized_importances = torch.tensor(normalized_importances, device='cuda')
-            normalized_importances -= normalized_importances.min()
-            normalized_importances /= normalized_importances.max()
-            normalized_importances *= 0.9
-            
-            for name, params in model.named_parameters():
-                layer_num = name.split('.')
-                if len(layer_num) <= 3 or layer_num[3].isnumeric() == False:
-                    continue
-                else:
-                    layer_num = int(layer_num[3])
-                if name == 'roberta.encoder.layer.1.output.LayerNorm.weight':
-                    print("before dropout")
-                    print(params[0:5])
-                if params.requires_grad:
-                    params = F.dropout(params, p=normalized_importances[layer_num-1].item())
-                if name == 'roberta.encoder.layer.1.output.LayerNorm.weight':
-                    print("after dropout")
-                    print(params[0:5])
-        """
     end = time.time()
     print(f'Epoch: {epoch} used {end-start} seconds')
     
@@ -318,7 +194,7 @@ label_dict = {'rte': 2, 'mrpc': 2, 'cola': 2, 'sst-2': 2, 'sts-b': 2, 'qnli': 2,
 def main(args):
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    wandb_name = f"{args.lr}-{args.seed}-{args.task}-{args.student_layer}"
+    wandb_name = f"{args.lr}-{args.seed}-{args.task}-{args.student_layer}-{args.sd_alpha}"
     if args.sage:
         wandb_name += '-sage'
     if args.weighted_dropout_iters > 0:
@@ -339,10 +215,6 @@ def main(args):
     np.random.seed(args.seed) # numpy random seed
     torch.backends.cudnn.deterministic = True
     
-    param_importance_dict = None
-    if args.plot_params:
-        print(f"--plot_params argument detected, printing the param importance while training")
-        param_importance_dict = {n: [] for n, p in model.named_parameters() if p.requires_grad}
     
     if args.sage:
         print(f"--sage marker detected, using AdamW with lr adaptive to param importance")
@@ -413,11 +285,6 @@ def main(args):
         print(f"epoch = {epoch} | acc = {result['accuracy']}")
         
     
-    if args.plot_params:
-        num_layers = 12 if 'base' in args.model_name else 24
-        for i in range(num_layers):
-            print(param_importance_by_layer[i])
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # basic training arguments
@@ -432,7 +299,6 @@ if __name__ == "__main__":
     
     # regularizers, tricks, plots...
     parser.add_argument("--sage", action='store_true')
-    parser.add_argument("--plot_params", action='store_true')
     parser.add_argument("--regularizer", default=None)
     parser.add_argument("--weighted_dropout_iters", type=int, default=0, help="interval for calculating weighted dropout")
     
@@ -440,8 +306,8 @@ if __name__ == "__main__":
     parser.add_argument("--use_sd", action='store_true', help="using teacher student self distillation")
     parser.add_argument("--sd_alpha", type=float, default=0.5, help="self-distillation loss scale")
     parser.add_argument("--use_id", action='store_true', help='using intra-distillation in teacher and student')
+    parser.add_argument("--id_alpha", type=float, default=0.5, help="intra-distillation scale")
     parser.add_argument("--student_layer", default=8, type=int)
-    parser.add_argument("--gradual", action='store_true', help='if set to be true, then the distillation loss is gradually added to the model')
     args = parser.parse_args()
     
     assert args.model_name in ['bert-base-uncased', 'bert-large-uncased'], "This code base only support bert-base-uncased and bert-large-uncased"

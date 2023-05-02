@@ -1,3 +1,6 @@
+bert.*.txt
+*.sh
 *.pth
 wandb/
 glue_data/
+bert-*
