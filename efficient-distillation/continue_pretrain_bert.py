@@ -114,7 +114,9 @@ def train(epoch, tokenizer, model, loader, optimizer, accelerator, accumulation_
         if (iteration + 1 % accumulation_steps == 0) or (iteration + 1 == len(loader)):
             optimizer.step() # update parameters
             optimizer.zero_grad()
-
+        
+        if iteration % 10000 == 0 and iteration != 0:
+            torch.save(model.state_dict(), f"/scratch4/cs601/tli104/bert-checkpoints-student/bert-large-bookcorpus-{epoch}-{iteration}.pt")
     end = time.time()
     print(f'Epoch: {epoch} used {end-start} seconds')
 
@@ -187,7 +189,7 @@ def main(args):
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm_probability=0.15)
 
     optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.lr) 
-    train_loader = DataLoader(encoded_dataset, batch_size=16, shuffle=True, collate_fn=data_collator)
+    train_loader = DataLoader(encoded_dataset, batch_size=32, shuffle=True, collate_fn=data_collator)
     #effective batch size = 16*4*8 = 512
     model, optimizer, train_loader = accelerator.prepare(
         model, optimizer, train_loader
@@ -196,8 +198,8 @@ def main(args):
 
     for epoch in range(args.epoch):
         train(epoch, tokenizer, model, train_loader, optimizer, accelerator, add_student=add)
-        torch.save(model.state_dict(), f"/scratch4/cs601/tli104/bert-checkpoints/bert-large-bookcorpus-{epoch}.pt")
-        print(f"saved model at /scratch4/cs601/tli104/bert-checkpoints/bert-large-bookcorpus-{epoch}.pt")
+        torch.save(model.state_dict(), f"/scratch4/cs601/tli104/bert-checkpoints-student/bert-large-bookcorpus-{epoch}.pt")
+        print(f"saved model at /scratch4/cs601/tli104/bert-checkpoints-student/bert-large-bookcorpus-{epoch}.pt")
     #model.push_to_hub("bert-large-bookcorpus")
 
 if __name__ == "__main__":
