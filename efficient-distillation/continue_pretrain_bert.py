@@ -189,7 +189,7 @@ def main(args):
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm_probability=0.15)
 
     optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.lr) 
-    train_loader = DataLoader(encoded_dataset, batch_size=32, shuffle=True, collate_fn=data_collator)
+    train_loader = DataLoader(encoded_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=data_collator)
     #effective batch size = 16*4*8 = 512
     model, optimizer, train_loader = accelerator.prepare(
         model, optimizer, train_loader
@@ -208,6 +208,7 @@ if __name__ == "__main__":
     parser.add_argument("--epoch", default=5, type=int)
     parser.add_argument("--lr", default=0.00001, type=float)
     parser.add_argument("--seed", default=1104, type=int)
+    parser.add_argument("--batch_size" default=16, type=int)
     parser.add_argument("--accumulation_step", default=8)
     # distillation related arguments
     parser.add_argument("--add_student", action='store_true')
