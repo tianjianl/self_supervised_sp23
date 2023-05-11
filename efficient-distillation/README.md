@@ -45,11 +45,11 @@ Each layer around 13M parameters
 | Model| QNLI | MRPC | RTE | SST-2 | Approx. # of Parameters |
 |------|:----:|:----:|:----:|:----:|:----------------------:|
 | Full 24 layers |  92.4 | 89.1 | 72.6 | 94.2 | 336M |
-| First 12 layers|  87.8  | 84.6 | 53.4 | 89.1 | 183M |
-| First 11 layers | - | - | 55.6 | 89.0 |  |
-| First 10 layers |  85.3  | 81.1 | 54.5 | 88.2 | 158M |
-| First 9 layers | - | - | 56.0 | 87.6 |  |
-| First 8 layers | - | - | 56.0 | 87.6 |  |
+| First 12 layers|  87.8  | 84.6 | 57.4 | 89.1 | 183M |
+| First 11 layers | - | - | 57.7 | 89.0 |  |
+| First 10 layers |  85.3  | 81.1 | 56.7 | 88.2 | 158M |
+| First 9 layers | - | - | 54.2 | 87.6 |  |
+| First 8 layers | - | - | 57.0 | 87.6 |  |
 
 ## Gradual Self-Teaching BERT-Large 
 
@@ -60,5 +60,5 @@ Schedule: 24-20, 20-16, 16-12
 | First 20 Layers | 58.6 | 71.1   | 92.8  | 254M             |
 | First 16 Layers | 60.4 |  70.0  | -      | 203M            |
 | First 12 Layers | **58.1** |  **63.9**  |  -     |  183M            |
-| First 12 Layers w/o gradual| 31.0 | 53.4 | 89.1   |  183M            |
+| First 12 Layers w/o gradual| 31.0 | 57.4 | 89.1   |  183M            |
     
