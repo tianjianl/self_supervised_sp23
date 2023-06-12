@@ -81,42 +81,45 @@ def train(epoch, tokenizer, model, loader, optimizer, accelerator, accumulation_
     model.train()
     start = time.time()
     loss_fct = nn.CrossEntropyLoss()
-
+    
     #initializing parameter importance dictionary
     for iteration, data in enumerate(loader, 0):
         
-        x = data['input_ids']
-        x_mask = data['attention_mask']
-        y = data['labels']
+        try:
+            x = data['input_ids']
+            x_mask = data['attention_mask']
+            y = data['labels']
         
-        if add_student:
-            output, output_student = model(input_ids=x, attention_mask=x_mask)
-        else:
-            output = model(input_ids=x, attention_mask=x_mask)
+            if add_student:
+                output, output_student = model(input_ids=x, attention_mask=x_mask)
+            else:
+                output = model(input_ids=x, attention_mask=x_mask)
 
-        labels = torch.where(x == tokenizer.mask_token_id, y, -100)
-        loss = loss_fct(output.view(-1, output.size(-1)), labels.view(-1)) 
+            labels = torch.where(x == tokenizer.mask_token_id, y, -100)
+            loss = loss_fct(output.view(-1, output.size(-1)), labels.view(-1)) 
         
-        if add_student:
-            loss += loss_fct(output_student.view(-1, output_student.size(-1)), labels.view(-1))
+            if add_student:
+                loss += loss_fct(output_student.view(-1, output_student.size(-1)), labels.view(-1))
         
-        loss = loss / accumulation_steps
-        accelerator.backward(loss)
+            loss = loss / accumulation_steps
+            accelerator.backward(loss)
 
-        #if args.use_sd:           
-        #    #self-distillation: symmetric kl divergence between teacher and student logits
-        #    loss += args.sd_alpha * get_symm_kl(output.view(-1), output_student.view(-1))
-            
-        if iteration%50 == 0:
-            wandb.log({"Training Loss": loss.item()})
-            print(f'Epoch: {epoch}, Iteration: {iteration}, Loss:  {loss.item()}')
+            #if args.use_sd:           
+            #    self-distillation: symmetric kl divergence between teacher and student logits
+            #    loss += args.sd_alpha * get_symm_kl(output.view(-1), output_student.view(-1))
         
-        if (iteration + 1 % accumulation_steps == 0) or (iteration + 1 == len(loader)):
-            optimizer.step() # update parameters
-            optimizer.zero_grad()
+            if ((iteration + 1) % accumulation_steps == 0) or (iteration + 1 == len(loader)):
+                optimizer.step() # update parameters
+                optimizer.zero_grad()
+                wandb.log({"Training Loss": loss.item()})
+                print(f'Epoch: {epoch}, Iteration: {iteration}, Loss:  {loss.item()}')
         
-        if iteration % 10000 == 0 and iteration != 0:
-            torch.save(model.state_dict(), f"/scratch4/cs601/tli104/bert-checkpoints-student/bert-large-bookcorpus-{epoch}-{iteration}.pt")
+            if iteration % 10000 == 0 and iteration != 0:
+                torch.save(model.state_dict(), 
+                        f"/scratch/tli104/bert-checkpoints-student/bert-large-bookcorpus-{epoch}-{iteration}.pt")
+        except RuntimeError:
+            print(f"Error occured at iteration {iteration}")
+            continue 
     end = time.time()
     print(f'Epoch: {epoch} used {end-start} seconds')
 
@@ -180,12 +183,11 @@ def main(args):
     
     print("Now loading bookcorpus dataset")
     start = time.time()
-    encoded_dataset = load_from_disk('/scratch4/cs601/tli104/bookcorpus_preprocessed')
+    encoded_dataset = load_from_disk('/scratch/tli104/bookcorpus_preprocessed')
     end = time.time()
     print(f"Load successful, used {end-start} seconds")
     
     encoded_dataset = encoded_dataset.remove_columns("text")
-
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm_probability=0.15)
 
     optimizer = torch.optim.AdamW(params=model.parameters(), lr=args.lr) 
@@ -195,11 +197,16 @@ def main(args):
         model, optimizer, train_loader
     )
     
-
     for epoch in range(args.epoch):
-        train(epoch, tokenizer, model, train_loader, optimizer, accelerator, add_student=add)
-        torch.save(model.state_dict(), f"/scratch4/cs601/tli104/bert-checkpoints-student/bert-large-bookcorpus-{epoch}.pt")
-        print(f"saved model at /scratch4/cs601/tli104/bert-checkpoints-student/bert-large-bookcorpus-{epoch}.pt")
+        train(epoch, tokenizer, 
+                model, 
+                train_loader, 
+                optimizer, 
+                accelerator, 
+                accumulation_steps=args.accumulation_step, 
+                add_student=add)
+        torch.save(model.state_dict(), f"/scratch/tli104/bert-checkpoints-student/bert-large-bookcorpus-{epoch}.pt")
+        print(f"saved model at /scratch/tli104/bert-checkpoints-student/bert-large-bookcorpus-{epoch}.pt")
     #model.push_to_hub("bert-large-bookcorpus")
 
 if __name__ == "__main__":
@@ -208,7 +215,7 @@ if __name__ == "__main__":
     parser.add_argument("--epoch", default=5, type=int)
     parser.add_argument("--lr", default=0.00001, type=float)
     parser.add_argument("--seed", default=1104, type=int)
-    parser.add_argument("--batch_size" default=16, type=int)
+    parser.add_argument("--batch_size",default=32, type=int)
     parser.add_argument("--accumulation_step", default=8)
     # distillation related arguments
     parser.add_argument("--add_student", action='store_true')

@@ -265,7 +265,7 @@ def main(args):
         for teacher_layer, student_layer in schedule:
             for epoch in range(args.epoch):
                 train(epoch, tokenizer, model, device, train_loader, optimizer, args, teacher_layer=teacher_layer, student_layer=student_layer)
-                torch.save(model.state_dict(), f"/scratch4/cs601/tli104/checkpoints/{args.task}_gradual_{student_layer}.pth")
+                torch.save(model.state_dict(), f"/scratch/cs601/tli104/checkpoints/{args.task}_gradual_{student_layer}.pth")
                 y_hat, y, dev_loss = validate(epoch, tokenizer, model, device, 
                                               val_loader, teacher_layer=teacher_layer, student_layer=student_layer, student=True)
                 if args.task == 'cola':

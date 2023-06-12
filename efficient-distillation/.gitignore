@@ -5,3 +5,4 @@ bert.*.txt
 wandb/
 glue_data/
 bert-*
+*.log
