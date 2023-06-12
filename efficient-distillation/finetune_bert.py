@@ -9,18 +9,22 @@ import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import cuda
 from torch.utils.data import Dataset, DataLoader, RandomSampler, SequentialSampler
-from transformers import BertModel, BertTokenizer
-from init_data import data_to_df 
 
+from transformers import BertModel, BertTokenizer
+from continue_pretrain_bert import BertForMaskedLanguageModeling
+
+from init_data import data_to_df 
 from rotk import Regularizer
 
 class BertForSequenceClassification(nn.Module):
 
     def __init__(self, model_name, num_labels, student_layer):
+        
         super(BertForSequenceClassification, self).__init__()
         self.model = BertModel.from_pretrained(model_name)
         if 'small' in model_name:
@@ -247,7 +251,7 @@ def main(args):
     if args.regularizer != None:
         regularizer = Regularizer(model = model, alpha = 1, dataset = train_loader, regularizer_type = args.regularizer)
     
-    if args.epoch == -1 or args.load_checkpoint:
+    if args.epoch == -1:
         epoch = -1
         model.load_state_dict(torch.load(f"./{args.task}_latest.pth"))   
         print(f"loaded checkpoint at {args.task}_latest.pth")
@@ -262,10 +266,16 @@ def main(args):
 
         result = acc.compute(references = y, predictions = y_hat)
         print(f"epoch = {epoch} | acc = {result['accuracy']}")
-                   
+    
+    if args.load_checkpoint:
+        print(f"loaded checkpoint from /scratch/tli104/bert-checkpoints-student/bert-large-bookcorpus-0-120000.pt")
+        state_dict = torch.load(f"/scratch/tli104/bert-checkpoints-student/bert-large-bookcorpus-0-120000.pt", map_location='cuda:0')
+        for key in list(state_dict.keys()):
+            state_dict[key.replace('module.', '')] = state_dict.pop(key)
+
     for epoch in range(args.epoch):
         train(epoch, tokenizer, model, device, train_loader, optimizer, args)
-        torch.save(model.state_dict(), f"/scratch4/cs601/tli104/checkpoints/{args.task}_latest.pth")
+        torch.save(model.state_dict(), f"/scratch/tli104/checkpoints/{args.task}_latest.pth")
         
         flag = False
         if args.use_sd:

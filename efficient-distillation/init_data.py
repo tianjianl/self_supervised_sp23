@@ -5,7 +5,7 @@ from glob import glob
 def data_to_df(task, language, split):
     
     if task == 'cola':
-        filename = f"glue_data/CoLA/{split}.tsv"
+        filename = f"/scratch/tli104/glue_data/CoLA/{split}.tsv"
         f = open(filename, 'r')
         src = []
         labels = []
