@@ -24,7 +24,7 @@ from init_data import data_to_df
 
 class OPTModelForSequenceClassification(nn.Module):
 
-    def __init__(self, model_name, num_labels, student_layer):
+    def __init__(self, model_name, num_labels, student_layer, vanilla=False):
         
         super(OPTModelForSequenceClassification, self).__init__()
         self.model = OPTModel.from_pretrained(model_name)
@@ -32,8 +32,11 @@ class OPTModelForSequenceClassification(nn.Module):
         self.classifier_t = nn.Linear(hidden_size, num_labels)
         self.classifier_s = nn.Linear(hidden_size, num_labels)
         self.student_layer = student_layer
+        
+        if vanilla:
+            self.student_model = OPTModel.from_pretrained(model_name)
     
-    def forward(self, input_ids, attention_mask):
+    def forward(self, input_ids, attention_mask, vanilla=False):
         output = self.model(input_ids=input_ids, 
                 attention_mask=attention_mask, 
                 output_hidden_states=True)
@@ -43,13 +46,20 @@ class OPTModelForSequenceClassification(nn.Module):
         
         assert torch.equal(hidden_states[-1], output.last_hidden_state)
         
-        mean_s = hidden_states[-1][:, -1, :]
-        mean_t = hidden_states[self.student_layer][:, -1, :]
+        mean_t = hidden_states[-1][:, -1, :]
         #mean_t = torch.mean(hidden_states[-1], dim=1)
         #mean_s = torch.mean(hidden_states[self.student_layer], dim=1)
         teacher_logits = self.classifier_t(mean_t)
-        student_logits = self.classifier_s(mean_s)
-
+        
+        if vanilla == False: # self-teaching
+            mean_s = hidden_states[self.student_layer][:, -1, :]
+            student_logits = self.classifier_s(mean_s)
+        else:
+            output_student = self.student_model(input_ids=input_ids, 
+                                            attention_mask=attention_mask,
+                                            output_hidden_states=True)
+            mean_s = output_student.hidden_states[-1][:, -1, :]
+            student_logits = self.classifier_s(mean_s)
         return teacher_logits, student_logits
 
 class CustomClassificationDataset(Dataset):
@@ -131,7 +141,6 @@ def train(epoch, tokenizer, model, device, loader, optimizer, args, scheduler=No
         if iteration%50 == 0:
             wandb.log({"Training Loss": loss.item()})
             print(f'Epoch: {epoch}, Iteration: {iteration}, Loss:  {loss.item()}')
-        
 
         optimizer.zero_grad()
         #forward_time = time.time()
@@ -274,6 +283,6 @@ if __name__ == "__main__":
     parser.add_argument("--use_sd", action='store_true', 
             help="using teacher student self distillation")
     parser.add_argument("--sd_alpha", type=float, default=0.5, help="self-distillation loss scale")
-    parser.add_argument("--student_layer", default=8, type=int)
+    parser.add_argument("--student_layer", default=12, type=int)
     args = parser.parse_args()
     main(args)

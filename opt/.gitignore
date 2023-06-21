@@ -1,0 +1,11 @@
+__pycache__/
+wandb/
+logs/
+qqp-sd.txt
+bert.*.txt
+*.sh
+*.pth
+wandb/
+glue_data/
+bert-*
+*.log
